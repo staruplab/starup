@@ -1,0 +1,14 @@
+{
+  "name": "STAR UP!",
+  "short_name": "STAR UP!",
+  "description": "ระบบสะสมดาวและส่งเสริมพฤติกรรมนักเรียน",
+  "start_url": "/starup/",
+  "scope": "/starup/",
+  "display": "standalone",
+  "background_color": "#8b4de8",
+  "theme_color": "#8b4de8",
+  "icons": [
+    {"src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}
+  ]
+}
