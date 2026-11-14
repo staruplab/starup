@@ -1,10 +1,12 @@
 /* STAR UP! PWA service worker — GitHub Pages /starup/ */
-const CACHE_NAME = 'star-up-pwa-v5';
+const CACHE_NAME = 'star-up-pwa-v6';
 const BASE = new URL(self.registration.scope);
 const CORE_FILES = [
   '',
   'index.html',
   'manifest.webmanifest',
+  'manifest-teacher.webmanifest',
+  'manifest-student.webmanifest',
   'manifest.json',
   'logo-star-up.jpg',
   'icon-192.png',

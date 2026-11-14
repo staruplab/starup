@@ -1,0 +1,24 @@
+STAR UP! — Hotfix อาการกดเข้าสู่ระบบครูแล้วเงียบ
+
+สิ่งที่เปลี่ยน:
+- เรียกปุ่มเข้าสู่ระบบผ่าน window.signIn() อย่างชัดเจน
+- เปิดเผยฟังก์ชัน signIn บน window เพื่อรองรับ inline click handler
+- เปลี่ยนชื่อ cache ของ Service Worker จาก v3 เป็น v4 เพื่อบังคับอัปเดตแคช
+- ไม่แก้ไขฐานข้อมูล, SQL, Migration หรือบัญชีผู้ใช้
+
+วิธีอัปเดต:
+1. แตก ZIP
+2. อัปโหลด index.html และ sw.js ไปแทนที่ไฟล์เดิมใน root ของ GitHub Pages (/starup/)
+3. Commit changes
+4. รอ GitHub Pages deploy เสร็จ
+5. ปิดแท็บ STAR UP! ทุกแท็บ รวมถึงหน้าต่างแอปที่ติดตั้งไว้ แล้วเปิด Brave ใหม่
+6. เข้า https://staruplab.github.io/starup/ แล้วรีเฟรช
+7. ทดลองเข้าสู่ระบบด้วยบัญชีครูเดิม
+
+หากยังไม่ทำงาน:
+- เปิดหน้าเว็บใน Private window เพื่อตัดปัญหา cache
+- ตรวจว่าไฟล์ https://staruplab.github.io/starup/index.html เป็นรุ่นล่าสุด
+- อย่าลบบัญชีเดิม อย่าล้างฐานข้อมูล และอย่ารัน SQL เพิ่ม
+
+หมายเหตุ:
+แพตช์นี้แก้การผูก event ของปุ่มและบังคับอัปเดต Service Worker cache แต่ยังต้องทดสอบบนเว็บไซต์จริงกับ Supabase ของเจ้าของระบบ
