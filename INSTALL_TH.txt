@@ -1,29 +1,40 @@
-STAR UP! ระบบภารกิจความดี — รุ่นปรับปรุง
+STAR UP! — วิธีอัปเดตและติดตั้ง PWA (GitHub Pages)
 
-ไฟล์ในชุดนี้:
-- index.html: เว็บแอปที่เพิ่มหมวดหมู่ภารกิจ วันหมดเขต และสถานะสำเร็จแล้ว
-- migration_missions.sql: ตารางภารกิจ/หลักฐาน, Storage bucket, RPC ตรวจและอนุมัติ พร้อมกติกาไม่ให้รับรางวัลภารกิจเดิมซ้ำ
+ไฟล์ในชุดนี้
+- index.html: เว็บแอป (รวมระบบยืนยันลบห้องแบบปุ่ม ยกเลิก/ยืนยัน)
+- manifest.webmanifest: ข้อมูลแอปสำหรับเบราว์เซอร์ ใช้ URL /starup/
+- manifest.json: สำเนาสำรองเพื่อรองรับการอ้างอิงเดิม
+- sw.js: Service Worker สำหรับ PWA และแคชเวอร์ชันใหม่
+- icon-192.png, icon-512.png: ไอคอน PWA
+- apple-touch-icon.png, favicon-32.png, favicon.ico: ไอคอนเบราว์เซอร์/มือถือ
+- logo-star-up.jpg: โลโก้ภายในเว็บ
+- migration_missions.sql: SQL เดิมของระบบภารกิจ (ไม่ได้แก้ไขในงาน PWA นี้)
 
-ติดตั้ง:
-1) สำรอง index.html และฐานข้อมูลเดิมก่อน
-2) Supabase Dashboard > SQL Editor > New query > วาง migration_missions.sql ทั้งไฟล์ > Run
-3) ตรวจว่าไม่มี error และ Storage มี bucket mission-evidence (private)
-4) อัปโหลด index.html นี้แทนไฟล์เดิมใน GitHub repository
-5) Commit changes แล้วรอ GitHub Pages เผยแพร่
-6) ทดสอบด้วยบัญชีครูและ QR นักเรียนจริง ทั้งการส่งรูป อนุมัติ ปฏิเสธ และส่งใหม่
+วิธีอัปเดต GitHub
+1. สำรอง Repository หรือดาวน์โหลด ZIP ปัจจุบันเก็บไว้ก่อน
+2. แตก ZIP นี้ แล้วเปิดโฟลเดอร์ STAR_UP_MISSIONS
+3. อัปโหลดไฟล์ทั้งหมดในโฟลเดอร์นี้ไปยังระดับเดียวกับ index.html ใน branch main ของ Repository ที่เผยแพร่ที่ https://staruplab.github.io/starup/
+4. เลือกแทนที่ไฟล์ชื่อซ้ำ ได้แก่ index.html, sw.js, manifest.webmanifest, manifest.json, ไฟล์ไอคอน และ logo-star-up.jpg
+5. เก็บ README_TH.txt, migration_v4.sql และ schema.sql เดิมใน GitHub ไว้ ไม่ต้องลบ
+6. ห้ามรัน migration_missions.sql, migration_v4.sql หรือ schema.sql ซ้ำเพียงเพื่อแก้ PWA
+7. Commit changes แล้วรอ GitHub Pages เผยแพร่
 
-คุณสมบัติเพิ่ม:
-- ครูเลือกหมวดหมู่ภารกิจและกำหนดวันหมดเขตได้
-- นักเรียนเห็นหมวดหมู่/วันหมดเขตและสถานะสำเร็จ
-- นักเรียนรับดาวจากภารกิจเดิมได้ครั้งเดียว; หากถูกปฏิเสธยังแก้ไขและส่งใหม่ได้
-- การอนุมัติใช้ RPC ฝั่งฐานข้อมูลและล็อกแถวเพื่อป้องกันการอนุมัติซ้ำ
+วิธีตรวจสอบไฟล์หลังอัปเดต
+เปิด URL ต่อไปนี้ในเบราว์เซอร์ ต้องไม่เป็น 404:
+- https://staruplab.github.io/starup/manifest.webmanifest
+- https://staruplab.github.io/starup/sw.js
+- https://staruplab.github.io/starup/icon-192.png
+- https://staruplab.github.io/starup/icon-512.png
 
-ข้อควรทราบ:
-- SQL นี้ออกแบบให้รันต่อจาก migration_missions.sql รุ่นก่อนในชุดเดิม ไม่ใช่แทน schema.sql
-- ถ้ามีรายการอนุมัติซ้ำเก่าก่อนติดตั้ง ระบบจะเก็บรายการแรกและเปลี่ยนรายการซ้ำเป็น rejected โดยไม่ปรับยอดดาวย้อนหลัง
-- โหมดทดลองในเบราว์เซอร์ไม่รองรับการส่งรูปจริง ต้องใช้ Supabase ออนไลน์
-- ห้ามใส่ service_role key ใน index.html
-- ภาพหลักฐานเป็นข้อมูลส่วนตัวของนักเรียน ควรให้ครูที่ได้รับอนุญาตเท่านั้นเข้าดู และลบภาพตามนโยบายโรงเรียนเมื่อหมดความจำเป็น
+วิธีติดตั้งบน Android/Brave
+1. เปิด https://staruplab.github.io/starup/ ผ่าน HTTPS
+2. รีเฟรชหน้าเว็บ แล้วรอให้ Service Worker ลงทะเบียน
+3. เปิดเมนู Brave (⋮) แล้วตรวจว่ามี “ติดตั้งแอป” หรือ “เพิ่มลงในหน้าจอหลัก”
+4. หากยังไม่ขึ้น ให้ปิดแท็บ เปิดเว็บใหม่ และรอสักครู่ จากนั้นตรวจ URL ด้านบนอีกครั้ง
+5. หากเคยติดตั้ง/เคยเปิดเว็บมาก่อน ให้ล้างข้อมูลเว็บไซต์ของ staruplab.github.io แล้วเปิดใหม่เพื่อให้รับ manifest และ Service Worker รุ่นใหม่
 
-
-PWA UPDATE: อัปโหลดไฟล์ index.html, manifest.json, sw.js, logo-star-up.jpg, icon-192.png และ icon-512.png ไว้ในโฟลเดอร์เดียวกันบน GitHub Pages (โฟลเดอร์ /starup/) แล้วเปิดเว็บผ่าน HTTPS จากนั้นรีเฟรชหน้าเว็บ หากยังไม่เห็นปุ่มติดตั้ง ให้เปิดเมนูเบราว์เซอร์และเลือก “ติดตั้งแอป” หรือ “เพิ่มลงในหน้าจอหลัก”
+หมายเหตุสำคัญ
+- PWA ต้องเปิดผ่าน HTTPS และต้องเข้าผ่าน path /starup/ ตามที่กำหนดใน manifest
+- การมีปุ่มติดตั้งในหน้าเว็บไม่ได้บังคับให้ Brave แสดงหน้าติดตั้งเสมอไป; เบราว์เซอร์เป็นผู้ตัดสินจากเงื่อนไขและสถานะของเว็บไซต์
+- ไฟล์ชุดนี้ไม่ได้เชื่อมต่อ GitHub ให้โดยตรง และยังต้องอัปโหลด/ทดสอบบนอุปกรณ์จริง
+- ไม่ได้เปลี่ยนค่า Supabase, schema.sql หรือ migration เดิม
