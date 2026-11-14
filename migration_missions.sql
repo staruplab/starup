@@ -2,7 +2,7 @@
 create table if not exists public.missions (
  id uuid primary key default gen_random_uuid(), classroom_id uuid not null references public.classrooms(id) on delete cascade,
  title text not null check(char_length(title) between 1 and 100), description text not null default '',
- reward_stars integer not null default 1 check(reward_stars between 1 and 100), active boolean not null default true,
+ reward_stars integer not null default 1 check(reward_stars >= 1), active boolean not null default true,
  created_by uuid references auth.users(id) on delete set null, created_at timestamptz not null default now()
 );
 create index if not exists missions_room_idx on public.missions(classroom_id,active,created_at desc);
@@ -69,7 +69,7 @@ create policy mission_evidence_student_upload on storage.objects for insert to a
 );
 drop policy if exists mission_evidence_teacher_read on storage.objects;
 create policy mission_evidence_teacher_read on storage.objects for select to authenticated using(
- bucket_id='mission-evidence' and exists(select 1 from public.mission_submissions q where q.image_path=name and public.is_member(q.classroom_id))
+ bucket_id='mission-evidence' and exists(select 1 from public.mission_submissions q where name=any(string_to_array(q.image_path,'|')) and public.is_member(q.classroom_id))
 );
 
 -- Extend student QR portal with active missions and own submission status
