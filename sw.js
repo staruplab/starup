@@ -1,5 +1,5 @@
 /* STAR UP! PWA service worker — GitHub Pages /starup/ */
-const CACHE_NAME = 'star-up-pwa-v7';
+const CACHE_NAME = 'star-up-pwa-v8';
 const BASE = new URL(self.registration.scope);
 const CORE_FILES = [
   '',
