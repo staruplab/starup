@@ -6,32 +6,14 @@
   "start_url": "/starup/",
   "scope": "/starup/",
   "display": "standalone",
-  "display_override": [
-    "standalone",
-    "minimal-ui"
-  ],
+  "display_override": ["standalone", "minimal-ui"],
   "orientation": "portrait-primary",
   "background_color": "#f7f5ff",
   "theme_color": "#7668e8",
   "prefer_related_applications": false,
   "icons": [
-    {
-      "src": "./icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "./icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "./icon-maskable-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "maskable"
-    }
+    {"src": "/starup/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "/starup/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+    {"src": "/starup/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
   ]
 }
