@@ -1,0 +1,8 @@
+การเก็บรูปภารกิจ STAR UP!
+
+กำหนดอายุรูปหลักฐานภารกิจไว้ 7 วันนับจากเวลาที่อัปโหลด หลังครบกำหนดระบบหลังบ้านจะลบเฉพาะไฟล์ใน Supabase Storage bucket mission-evidence
+
+ไฟล์ที่ต้อง deploy: supabase/functions/cleanup-mission-evidence/index.ts
+คู่มือติดตั้งและตั้งเวลา: supabase/functions/cleanup-mission-evidence/README_TH.txt
+
+สำคัญ: การใส่ไฟล์ไว้ใน GitHub อย่างเดียวไม่ได้เปิดการลบอัตโนมัติ ต้อง deploy Edge Function และตั้ง Scheduled invocation ใน Supabase ก่อน ห้ามใส่ service_role key ในหน้าเว็บหรือ GitHub

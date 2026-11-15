@@ -1,0 +1,12 @@
+STAR UP! — อัปเดตแอปครู/นักเรียนแยกกัน + Splash Screen + เก็บรูปภารกิจ 7 วัน
+
+1) อัปโหลดเนื้อหาทั้งหมดใน STAR_UP_MISSIONS ไปที่ Root ของ GitHub Pages (คงโฟลเดอร์ teacher/ และ student/ ไว้)
+2) URL ครู: https://YOUR-USERNAME.github.io/YOUR-REPOSITORY/teacher/
+3) URL นักเรียน: https://YOUR-USERNAME.github.io/YOUR-REPOSITORY/student/
+4) แอปครูและนักเรียนมี manifest id, start_url, scope, Service Worker และ cache แยกกัน จึงติดตั้งเป็นคนละแอปได้บน Origin เดียวกันในเบราว์เซอร์ที่รองรับ
+5) QR นักเรียนจากหน้าครูจะชี้ไปยัง /student/?student=TOKEN
+6) ถอนการติดตั้ง STAR UP! ตัวเดิมก่อนติดตั้งใหม่ทั้งสองแอป และล้างข้อมูลเว็บไซต์/Service Worker เก่าหากยังแสดงแอปเดิม
+7) หน้าเริ่มต้นมี splash animation ใช้โลโก้ STAR UP! เดิมในกรอบมุมโค้ง ไม่เปลี่ยนตัวโลโก้
+8) รูปหลักฐานภารกิจ: มี Edge Function สำหรับลบไฟล์ที่เก่ากว่า 7 วันใน Supabase Storage bucket mission-evidence ดู RETENTION_SETUP_TH.txt และ README ในโฟลเดอร์ function
+
+หมายเหตุ: ทั้งสองแอปยังใช้ Supabase project และข้อมูลชุดเดิมร่วมกัน การแยกนี้เป็นการแยกตัวตน/การติดตั้ง PWA ไม่ใช่การแยกฐานข้อมูล
