@@ -1,7 +1,7 @@
 /* STAR UP! student PWA — independent scope and cache */
-const CACHE_NAME='star-up-student-v6';
+const CACHE_NAME = 'star-up-pwa-v14-exact-logo';
 const BASE=new URL(self.registration.scope);
-const CORE=['','index.html','manifest.webmanifest','logo-star-up.jpg','icon-192.png','icon-512.png','apple-touch-icon.png','favicon-32.png'].map(p=>new URL(p,BASE).href);
+const CORE=['','index.html','manifest.webmanifest','logo-star-up.jpg','logo-star-up-transparent.png','icon-192.png','icon-512.png','apple-touch-icon.png','favicon-32.png'].map(p=>new URL(p,BASE).href);
 self.addEventListener('install',e=>e.waitUntil((async()=>{const c=await caches.open(CACHE_NAME);await Promise.all(CORE.map(async u=>{try{const r=await fetch(u,{cache:'reload'});if(r.ok)await c.put(u,r)}catch{}}));await self.skipWaiting()})()));
 self.addEventListener('activate',e=>e.waitUntil((async()=>{const ks=await caches.keys();await Promise.all(ks.filter(k=>k.startsWith('star-up-student-')&&k!==CACHE_NAME).map(k=>caches.delete(k)));await self.clients.claim()})()));
 self.addEventListener('fetch',e=>{const r=e.request,u=new URL(r.url);if(r.method!=='GET'||u.origin!==self.location.origin||!u.pathname.startsWith(BASE.pathname))return;if(r.mode==='navigate'){e.respondWith((async()=>{try{const x=await fetch(r);if(x.ok){const c=await caches.open(CACHE_NAME);await c.put(new URL('index.html',BASE).href,x.clone())}return x}catch{return (await caches.match(new URL('index.html',BASE).href))||Response.error()}})());return}e.respondWith((async()=>{const c=await caches.open(CACHE_NAME),hit=await c.match(r);if(hit)return hit;const x=await fetch(r);if(x.ok)await c.put(r,x.clone());return x})())});
