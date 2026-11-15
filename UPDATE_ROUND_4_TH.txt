@@ -1,0 +1,1 @@
+อัปเดต Round 4: เพิ่มคลังของรางวัลและการเลือกหลายรายการพร้อมกัน ดู UPDATE_REWARD_LIBRARY_TH.txt และรัน migration_reward_library.sql ก่อนอัปโหลด
