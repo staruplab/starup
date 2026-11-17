@@ -401,8 +401,58 @@ function showUrgentMissionAlert(m){if(!m||!m.id||seenUrgentMissionIds.has(m.id))
 function closeUrgentMissionAlert(){clearInterval(urgentAlertTimer);urgentAlertTimer=null;document.getElementById('urgentAlertModal')?.remove()}
 async function openUrgentMissionFromAlert(id){closeUrgentMissionAlert();try{studentData=await getStudentPortal(studentToken);studentTab='missions';renderStudent();setTimeout(()=>document.querySelector(`[data-mission-id="${id}"]`)?.scrollIntoView({behavior:'smooth',block:'center'}),100)}catch(e){toast('เปิดภารกิจไม่สำเร็จ: '+e.message)}}
 function subscribeUrgentMissions(){if(!studentToken||!studentData)return;if(urgentPollTimer)clearInterval(urgentPollTimer);if(!seenUrgentMissionIds.size)(studentData.missions||[]).forEach(m=>seenUrgentMissionIds.add(m.id));urgentPollTimer=setInterval(async()=>{try{let fresh=await getStudentPortal(studentToken);if(!fresh)return;studentData=fresh;(fresh.missions||[]).forEach(m=>{if(m.is_urgent&&!seenUrgentMissionIds.has(m.id)&&(!m.urgent_until||new Date(m.urgent_until)>new Date()))showUrgentMissionAlert(m);else seenUrgentMissionIds.add(m.id)})}catch(e){}},5000)}
-async function loadStudent(){try{if(CLOUD_READY)supa=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);studentData=await getStudentPortal(studentToken);if(!studentData){$('#app').innerHTML='<div class="profilewrap"><div class="panel profile-card center"><div class="big">🔒</div><h2>ไม่พบโปรไฟล์นักเรียน</h2><p class="muted">'+(isDemo()?'แอปนี้ยังไม่ได้เชื่อมต่อฐานข้อมูล (Supabase) จึงเปิดโปรไฟล์จากเครื่องอื่นไม่ได้ ผู้ดูแลต้องตั้งค่า SUPABASE_URL และ SUPABASE_ANON_KEY ในไฟล์ก่อน':'QR อาจไม่ถูกต้องหรือถูกยกเลิกแล้ว กรุณาติดต่อคุณครู')+'</p></div></div>';return}renderStudent();subscribeUrgentMissions()}catch(e){$('#app').innerHTML=`<div class="profilewrap"><div class="panel profile-card center"><h2>เปิดโปรไฟล์ไม่สำเร็จ</h2><p>${esc(e.message)}</p></div></div>`}}
-function renderStudent(){$('#app').innerHTML=`<div class="profilewrap">${previewMode?'<div class="notice info" style="position:sticky;top:0;z-index:5;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">👁 โหมดตัวอย่าง: กำลังดูหน้าจอของนักเรียน (ดูได้อย่างเดียว)<button class="btn white small" onclick="exitPreview()">← กลับหน้าครู</button></div>':''}<div class="profilehead"><div class="brand"><img class="brandmark" src="logo-star-up-rounded.png?v=logo14" alt="STAR UP!"><div><h1>STAR UP!</h1><small>LEARN • PLAY • GROW</small></div></div><div class="actions"><span class="badge">STUDENT PROFILE</span>${previewMode?'':'<button class="btn white small" onclick="logoutStudent()">ออกจากระบบ</button>'}</div></div><div class="studentapp"><section class="studenthero"><div><div class="tiny muted">WELCOME, STAR!</div><h2 style="margin:4px 0 8px">${esc(studentData.student.full_name)} ✨</h2><div class="tiny muted">🏫 ${esc(studentData.classroom?.name||'ห้องเรียน')}</div><div class="star-balance" style="font:900 38px Nunito;color:#d69a1e;margin-top:12px">${money(studentData.student.stars)} ⭐</div><div class="tiny muted">ดาวสะสมของฉัน</div></div><div class="profile-icon large">${esc(studentData.student.profile_icon||'⭐')}</div></section><nav class="student-tabs">${[['profile','🌟 โปรไฟล์'],['missions','🌱 ภารกิจ'],['icon','😊 ไอคอนของฉัน'],['rewards','🎁 ร้านแลกรางวัล'],['ranking','🏆 อันดับ']].map(([id,t])=>`<button class="tab ${studentTab===id?'active':''}" onclick="studentTab='${id}';renderStudent()">${t}</button>`).join('')}</nav>${studentContent()}<div class="profilefoot">STAR UP! • ทุกคนมีดาวเป็นของตัวเอง</div></div></div>`}
+
+let studentNoticePoll=null, studentNoticeBusy=false, studentNoticeQueue=[];
+function notificationEscape(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+async function fetchStudentNoticeQueue(){
+ if(!supa||!studentToken||studentNoticeBusy)return;
+ studentNoticeBusy=true;
+ try{
+  let {data,error}=await supa.rpc('get_student_notifications',{p_token:studentToken});
+  if(error)throw error;
+  studentNoticeQueue=Array.isArray(data)?data:[];
+  showNextStudentNotice();
+ }catch(e){console.warn('Student notification queue:',e.message)}
+ finally{studentNoticeBusy=false}
+}
+function showNextStudentNotice(){
+ if(!studentNoticeQueue.length||document.getElementById('starupStudentNotice'))return;
+ studentNoticeQueue.sort((a,b)=>(a.kind==='urgent_mission'?0:1)-(b.kind==='urgent_mission'?0:1)||new Date(a.created_at)-new Date(b.created_at));
+ const n=studentNoticeQueue[0], urgent=n.kind==='urgent_mission', approved=n.kind==='approved';
+ const color=urgent?'#fff0d9':approved?'#e2f7ea':'#eee8ff';
+ const icon=urgent?'🚨':approved?'⭐':n.kind==='revision'?'📝':n.kind==='rejected'?'📌':'🌱';
+ const box=document.createElement('div');box.id='starupStudentNotice';
+ box.style.cssText='position:fixed;inset:0;z-index:100000;background:#17132999;display:grid;place-items:center;padding:18px';
+ box.innerHTML=`<div style="width:min(100%,420px);background:${color};color:#30264a;border-radius:22px;padding:24px;box-shadow:0 20px 70px #0005;text-align:center">
+ <div style="font-size:42px">${icon}</div><div style="font-size:21px;font-weight:900;margin:8px 0">${notificationEscape(n.title)}</div>
+ <div style="font-size:15px;line-height:1.6;white-space:pre-wrap">${notificationEscape(n.message)}</div>
+ ${approved?`<div style="font-size:30px;font-weight:900;margin:12px">⭐ +${Number(n.stars_delta)||0} ดาว</div>`:''}
+ <button id="starupNoticeAck" style="margin-top:20px;border:0;border-radius:12px;background:#7554bd;color:white;padding:13px 28px;font-weight:800;font-size:16px;width:100%">รับทราบ</button></div>`;
+ document.body.append(box);
+ box.querySelector('#starupNoticeAck').onclick=async()=>{
+  const b=box.querySelector('button');b.disabled=true;b.textContent='กำลังบันทึก...';
+  try{let {error}=await supa.rpc('ack_student_notification',{p_token:studentToken,p_notification_id:n.id});if(error)throw error;
+   studentNoticeQueue=studentNoticeQueue.filter(x=>x.id!==n.id);box.remove();setTimeout(showNextStudentNotice,150);
+  }catch(e){b.disabled=false;b.textContent='ลองอีกครั้ง';toast('บันทึกการรับทราบไม่สำเร็จ: '+e.message)}
+ };
+}
+function startStudentNotificationQueue(){
+ if(studentNoticePoll)clearInterval(studentNoticePoll);
+ fetchStudentNoticeQueue();
+ studentNoticePoll=setInterval(fetchStudentNoticeQueue,5000);
+ document.addEventListener('visibilitychange',()=>{if(!document.hidden)fetchStudentNoticeQueue()});
+}
+
+async function openStudentNotificationHistory(){
+ try{
+  let {data,error}=await supa.rpc('get_student_notification_history',{p_token:studentToken});
+  if(error)throw error;
+  let rows=Array.isArray(data)?data:[];
+  modal(`<h3>🔔 ประวัติการแจ้งเตือน</h3><div style="max-height:60vh;overflow:auto">${rows.length?rows.map(n=>`<div class="listrow" style="display:block"><b>${notificationEscape(n.title)}</b><div class="tiny muted">${notificationEscape(n.message)}</div><div class="tiny muted">${new Date(n.created_at).toLocaleString('th-TH')} • ${n.acknowledged_at?'รับทราบแล้ว':'ยังไม่รับทราบ'}</div></div>`).join(''):'<div class="empty">ยังไม่มีประวัติแจ้งเตือน</div>'}</div><div class="modalfoot"><button class="btn primary" onclick="closeModal()">ปิด</button></div>`);
+ }catch(e){toast('เปิดประวัติแจ้งเตือนไม่สำเร็จ: '+e.message)}
+}
+async function loadStudent(){try{if(CLOUD_READY)supa=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);studentData=await getStudentPortal(studentToken);if(!studentData){$('#app').innerHTML='<div class="profilewrap"><div class="panel profile-card center"><div class="big">🔒</div><h2>ไม่พบโปรไฟล์นักเรียน</h2><p class="muted">'+(isDemo()?'แอปนี้ยังไม่ได้เชื่อมต่อฐานข้อมูล (Supabase) จึงเปิดโปรไฟล์จากเครื่องอื่นไม่ได้ ผู้ดูแลต้องตั้งค่า SUPABASE_URL และ SUPABASE_ANON_KEY ในไฟล์ก่อน':'QR อาจไม่ถูกต้องหรือถูกยกเลิกแล้ว กรุณาติดต่อคุณครู')+'</p></div></div>';return}renderStudent();startStudentNotificationQueue();subscribeUrgentMissions()}catch(e){$('#app').innerHTML=`<div class="profilewrap"><div class="panel profile-card center"><h2>เปิดโปรไฟล์ไม่สำเร็จ</h2><p>${esc(e.message)}</p></div></div>`}}
+function renderStudent(){$('#app').innerHTML=`<div class="profilewrap">${previewMode?'<div class="notice info" style="position:sticky;top:0;z-index:5;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">👁 โหมดตัวอย่าง: กำลังดูหน้าจอของนักเรียน (ดูได้อย่างเดียว)<button class="btn white small" onclick="exitPreview()">← กลับหน้าครู</button></div>':''}<div class="profilehead"><div class="brand"><img class="brandmark" src="logo-star-up-rounded.png?v=logo14" alt="STAR UP!"><div><h1>STAR UP!</h1><small>LEARN • PLAY • GROW</small></div></div><div class="actions"><span class="badge">STUDENT PROFILE</span>${previewMode?'':'<button class="btn white small" onclick="openStudentNotificationHistory()">🔔 ประวัติแจ้งเตือน</button><button class="btn white small" onclick="logoutStudent()">ออกจากระบบ</button>'}</div></div><div class="studentapp"><section class="studenthero"><div><div class="tiny muted">WELCOME, STAR!</div><h2 style="margin:4px 0 8px">${esc(studentData.student.full_name)} ✨</h2><div class="tiny muted">🏫 ${esc(studentData.classroom?.name||'ห้องเรียน')}</div><div class="star-balance" style="font:900 38px Nunito;color:#d69a1e;margin-top:12px">${money(studentData.student.stars)} ⭐</div><div class="tiny muted">ดาวสะสมของฉัน</div></div><div class="profile-icon large">${esc(studentData.student.profile_icon||'⭐')}</div></section><nav class="student-tabs">${[['profile','🌟 โปรไฟล์'],['missions','🌱 ภารกิจ'],['icon','😊 ไอคอนของฉัน'],['rewards','🎁 ร้านแลกรางวัล'],['ranking','🏆 อันดับ']].map(([id,t])=>`<button class="tab ${studentTab===id?'active':''}" onclick="studentTab='${id}';renderStudent()">${t}</button>`).join('')}</nav>${studentContent()}<div class="profilefoot">STAR UP! • ทุกคนมีดาวเป็นของตัวเอง</div></div></div>`}
 function studentContent(){let p=studentData;if(studentTab==='missions')return studentMissionPage();if(studentTab==='icon')return `<section class="panel"><h3>😊 เลือกไอคอนประจำตัว</h3><p class="tiny muted">เลือกสัญลักษณ์ที่ชอบเพื่อใช้แทนรูปโปรไฟล์ของตัวเอง</p>${iconPicker(p.student.profile_icon||'⭐','studentChooseIcon')}<div class="modalfoot"><button class="btn primary" onclick="saveStudentIcon()">บันทึกไอคอน</button></div></section>`;if(studentTab==='rewards')return studentRewards();if(studentTab==='ranking')return `<section class="panel"><h3>🏆 LEADERBOARD • ${esc(p.classroom?.name||'ห้องเรียน')}</h3>${p.leaderboard.map((s,i)=>`<div class="listrow"><div class="row"><b class="rank">${['🥇','🥈','🥉'][i]||i+1}</b><span class="profile-icon">${esc(s.profile_icon||'⭐')}</span><strong>${esc(s.name)}</strong></div><b>${money(s.stars)} ⭐</b></div>`).join('')}</section>`;return `<div class="grid contentgrid"><section class="panel"><h3>✨ ความสำเร็จของฉัน</h3><div class="notice success">ทุกความพยายามมีค่า เก็บดาวเพื่อแลกรางวัลที่ชอบนะ!</div><div class="listrow"><span>ดาวสะสมทั้งหมด</span><b>${money(p.student.stars)} ⭐</b></div><div class="listrow"><span>ห้องเรียน</span><b>${esc(p.classroom?.name||'—')}</b></div></section><section class="panel"><h3>🧾 ประวัติดาวล่าสุด</h3>${p.recent.length?p.recent.map(t=>`<div class="listrow"><div><strong>${esc(t.reason)}</strong><div class="tiny muted">${new Date(t.created_at).toLocaleDateString('th-TH')}</div></div><b style="color:${t.stars_delta>=0?'#25855c':'#b66b23'}">${t.stars_delta>0?'+':''}${t.stars_delta} ⭐</b></div>`).join(''):'<div class="empty">ยังไม่มีกิจกรรม</div>'}</section></div><section class="panel" style="margin-top:14px"><h3>🔔 สถานะคำขอแลกรางวัล</h3>${p.requests.slice(0,5).map(r=>`<div class="listrow"><span>${esc(r.emoji||'🎁')} ${esc(r.reward_name||'ของรางวัล')}</span><span class="badge">${statusText(r.status)}</span></div>`).join('')||'<div class="empty">ยังไม่มีคำขอ</div>'}</section>`}
 function statusText(s){return s==='pending'?'รอครูอนุมัติ':s==='approved'?'อนุมัติแล้ว':'ไม่อนุมัติ'}
 function studentChooseIcon(icon,el){chooseIcon(icon,el)}
