@@ -446,7 +446,7 @@ function openMissionSubmit(id,keepSelection=false){
   if(prior.some(x=>x.status==='pending'))return toast('ส่งภารกิจนี้แล้ว กรุณารอคุณครูอนุมัติก่อน');
   if(prior.some(x=>x.status==='approved'))return toast('ภารกิจนี้ได้รับอนุมัติแล้ว');
   let m=(studentData.missions||[]).find(x=>x.id===id);
-  if(!keepSelection){selectedMissionEvidence=[];missionReplaceIndex=-1}
+  if(!keepSelection){selectedMissionEvidence=[];missionReplaceIndex=-1;missionNoteDraft=''}
   modal(`<h3>📸 ส่งหลักฐานภารกิจ</h3><p><b>${esc(m?.title||'ภารกิจ')}</b> • รับ ${m?.reward_stars||1} ดาว</p>
     <div class="upload-choice">
       <button id="missionAddCamera" class="btn white" onclick="if(selectedMissionEvidence.length<4)$('#missionCamera').click()" ${selectedMissionEvidence.length>=4?'disabled':''}>📷 ถ่ายภาพจากกล้อง</button>
@@ -461,10 +461,12 @@ function openMissionSubmit(id,keepSelection=false){
     <div class="notice info">กรุณาถ่ายภาพกิจกรรมจริง และหลีกเลี่ยงภาพที่เห็นใบหน้าหรือข้อมูลส่วนตัวของเพื่อนโดยไม่ได้รับอนุญาต</div>
     <div class="modalfoot"><button class="btn white" onclick="closeModal()">ยกเลิก</button><button class="btn primary" onclick="submitMission('${id}')">ส่งภาพให้ครูตรวจ</button></div>`);
   renderMissionFileList();
+  {let nb=$('#missionNote');if(nb&&missionNoteDraft)nb.value=missionNoteDraft}
 }
 function imageToJpeg(file){return new Promise((resolve,reject)=>{let img=new Image(),url=URL.createObjectURL(file);img.onload=()=>{try{let max=1600,scale=Math.min(1,max/Math.max(img.width,img.height)),w=Math.max(1,Math.round(img.width*scale)),h=Math.max(1,Math.round(img.height*scale)),canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;canvas.getContext('2d',{alpha:false}).drawImage(img,0,0,w,h);let quality=.78;const encode=()=>canvas.toBlob(blob=>{if(!blob){URL.revokeObjectURL(url);return reject(new Error('แปลงรูปภาพไม่สำเร็จ'))}if(blob.size>1400*1024&&quality>.52){quality-=.1;return encode()}URL.revokeObjectURL(url);resolve(new File([blob],(file.name.replace(/\.[^.]+$/,'')||'mission')+'.jpg',{type:'image/jpeg',lastModified:Date.now()}))},'image/jpeg',quality);encode()}catch(e){URL.revokeObjectURL(url);reject(e)}};img.onerror=()=>{URL.revokeObjectURL(url);reject(new Error('เปิดรูปภาพนี้ไม่ได้ กรุณาใช้ JPG, PNG หรือ WebP'))};img.src=url})}
 function missionProgress(title,detail,done=0,total=0){let pct=total?Math.round(done/total*100):0;modal(`<div class="center"><div class="progress-orbit"><span>🌟</span></div><h3>${title}</h3><p class="muted" id="missionProgressDetail">${detail}</p><div style="height:9px;background:#eee9ff;border-radius:99px;overflow:hidden;margin:15px 0"><div id="missionProgressBar" style="height:100%;width:${pct}%;background:linear-gradient(90deg,#7668e8,#ff8d9d);border-radius:99px;transition:width .25s"></div></div><div class="tiny muted" id="missionProgressCount">${total?`${done}/${total} ภาพ`:'กำลังเตรียมภาพ'}</div><div class="notice info">อย่าปิดหน้านี้นะ อีกนิดเดียวก็เสร็จแล้ว 💜</div></div>`)}
 function updateMissionProgress(detail,done,total){let d=$('#missionProgressDetail'),b=$('#missionProgressBar'),c=$('#missionProgressCount');if(d)d.textContent=detail;if(b)b.style.width=Math.round(done/total*100)+'%';if(c)c.textContent=`${done}/${total} ภาพ`}
+var missionNoteDraft='';
 async function submitMission(id){
   if(missionUploadBusy)return;
   let previous=(studentData?.mission_submissions||[]).filter(x=>x.mission_id===id);
@@ -474,6 +476,7 @@ async function submitMission(id){
   if(!files.length)return toast('กรุณาถ่ายภาพหรือเลือกภาพหลักฐาน');
   if(files.length>4)return toast('แนบภาพได้สูงสุด 4 ภาพ');
   if(!supa||!studentToken)return toast('การเชื่อมต่อยังไม่พร้อม กรุณาออกจากระบบแล้วสแกน QR ใหม่');
+  let note=($('#missionNote')?.value||'').trim().slice(0,500);missionNoteDraft=note;
   missionUploadBusy=true;let uploaded=[];
   try{
     missionProgress('กำลังเตรียมหลักฐาน','กำลังปรับขนาดภาพให้ส่งได้เร็วขึ้น…',0,files.length);
@@ -490,9 +493,9 @@ async function submitMission(id){
     let failed=settled.find(x=>x.status==='rejected');if(failed)throw failed.reason;
     let results=settled.map(x=>x.value);
     missionProgress('กำลังบันทึกการส่ง','ภาพครบแล้ว กำลังส่งภารกิจให้คุณครู…',files.length,files.length);
-    let {error}=await supa.rpc('student_submit_mission',{p_token:studentToken,p_mission_id:id,p_image_path:results.join('|'),p_note:$('#missionNote')?.value.trim()||''});
+    let {error}=await supa.rpc('student_submit_mission',{p_token:studentToken,p_mission_id:id,p_image_path:results.join('|'),p_note:note});
     if(error)throw error;
-    missionUploadBusy=false;selectedMissionEvidence=[];
+    missionUploadBusy=false;selectedMissionEvidence=[];missionNoteDraft='';
     missionPreviewUrls.forEach(u=>URL.revokeObjectURL(u));missionPreviewUrls=[];
     modal(`<div class="center"><div class="success-pop">✓</div><h2 style="color:#25855c">ส่งภาพสำเร็จแล้ว!</h2><p>หลักฐาน ${files.length} ภาพถูกส่งให้คุณครูเรียบร้อย 🎉</p><div class="notice success">ตอนนี้สถานะเป็น <b>รอคุณครูตรวจ</b> เมื่อครูอนุมัติ คุณจะได้รับดาวตามภารกิจ</div><div class="modalfoot" style="justify-content:center"><button class="btn primary" onclick="closeModal();loadStudent().then(()=>{studentTab='missions';renderStudent()})">เรียบร้อย</button></div></div>`);
   }catch(e){
