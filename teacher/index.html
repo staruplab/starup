@@ -198,6 +198,28 @@
 }
 
 </style>
+
+<style id="starup-splash-motion-v19">
+/* V19: splash-only motion. In-app UI, original logo files and data logic are untouched. */
+#startupSplash{isolation:isolate!important;overflow:hidden!important;background:radial-gradient(ellipse at 50% 42%,#fff 0%,#fbf8ff 48%,#eee8ff 100%)!important;transition:opacity .55s ease,visibility .55s ease!important}
+#startupSplash:before{content:""!important;display:block!important;position:absolute!important;z-index:0!important;inset:-35%!important;pointer-events:none!important;background:repeating-conic-gradient(from 0deg at 50% 50%,transparent 0deg 14deg,rgba(255,211,105,.13) 14.5deg 15deg,transparent 15.5deg 30deg)!important;mask-image:radial-gradient(ellipse at center,#000 0%,transparent 67%)!important;animation:suV19-rays 12s linear infinite!important}
+#startupSplash:after{content:""!important;display:block!important;position:absolute!important;z-index:0!important;width:min(82vw,390px)!important;aspect-ratio:1!important;border:1px solid rgba(154,116,235,.25)!important;border-radius:50%!important;box-shadow:0 0 0 16px rgba(154,116,235,.045),0 0 0 34px rgba(255,198,91,.05),0 0 55px rgba(151,112,231,.2)!important;pointer-events:none!important;animation:suV19-orbit 3.8s ease-in-out infinite!important}
+#startupSplash .startup-inner{position:relative!important;z-index:1!important;animation:suV19-enter .9s cubic-bezier(.2,.8,.2,1) both!important}
+#startupSplash .startup-full-image{transform-origin:50% 55%!important;animation:suV19-logo 3.4s ease-in-out .65s infinite!important;filter:drop-shadow(0 12px 22px rgba(106,70,180,.18))!important}
+#startupSplash .startup-dots i{animation:suV19-dot 1s ease-in-out infinite!important;box-shadow:0 0 12px rgba(151,112,231,.3)!important}
+#startupSplash .startup-dots i:nth-child(2){animation-delay:.16s!important}
+#startupSplash .startup-dots i:nth-child(3){animation-delay:.32s!important}
+#startupSplash .startup-loading-label{animation:suV19-label .7s ease .35s both!important}
+#startupSplash.is-hidden{opacity:0!important;visibility:hidden!important;pointer-events:none!important}
+@keyframes suV19-enter{0%{opacity:0;transform:translateY(22px) scale(.88);filter:blur(7px)}65%{opacity:1;transform:translateY(-4px) scale(1.025);filter:blur(0)}100%{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes suV19-logo{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-8px) scale(1.025)}}
+@keyframes suV19-rays{to{transform:rotate(360deg)}}
+@keyframes suV19-orbit{0%,100%{transform:scale(.91) rotate(-12deg);opacity:.55}50%{transform:scale(1.06) rotate(12deg);opacity:1}}
+@keyframes suV19-dot{0%,80%,100%{transform:translateY(0) scale(.78);opacity:.45}40%{transform:translateY(-6px) scale(1.12);opacity:1}}
+@keyframes suV19-label{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+@media(prefers-reduced-motion:reduce){#startupSplash:before,#startupSplash:after,#startupSplash .startup-inner,#startupSplash .startup-full-image,#startupSplash .startup-dots i,#startupSplash .startup-loading-label{animation:none!important}#startupSplash{transition:none!important}}
+</style>
+
 </head>
 <body><div id="startupSplash" aria-label="กำลังเปิด STAR UP"><div class="startup-inner"><img class="startup-full-image" src="../splash-star-up.jpg?v=splash10" alt="STAR UP!"><div class="startup-dots"><i></i><i></i><i></i></div></div></div><div id="app"></div><div class="modalback" id="modalback" onclick="if(event.target===this&&missionUploadBusy)event.preventDefault()"><div class="modal" id="modal"></div></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
@@ -713,7 +735,7 @@ setInterval(checkMembership,20000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)checkMembership()});
 guardOnce(['doPromoteTeacher','doRemoveTeacher']);
 
-init().catch(e=>{console.error(e);$('#app').innerHTML=`<div class="shell"><section class="panel"><h2>เกิดข้อผิดพลาด</h2><p>${esc(e.message)}</p></section></div>`}).finally(()=>{setTimeout(()=>document.getElementById('startupSplash')?.classList.add('is-hidden'),220)});
+init().catch(e=>{console.error(e);$('#app').innerHTML=`<div class="shell"><section class="panel"><h2>เกิดข้อผิดพลาด</h2><p>${esc(e.message)}</p></section></div>`}).finally(()=>{setTimeout(()=>document.getElementById('startupSplash')?.classList.add('is-hidden'),1450)});
 </script>
 <script>
 let starUpInstallPrompt = null;
