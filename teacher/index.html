@@ -466,11 +466,22 @@ function showNextStudentNotice(){
   }catch(e){b.disabled=false;b.textContent='ลองอีกครั้ง';toast('บันทึกการรับทราบไม่สำเร็จ: '+e.message)}
  };
 }
+const STUDENT_POLL_MS=20000; /* ตรวจแจ้งเตือนทุก 20 วินาที (ลดจาก 5 วินาที) และหยุดเมื่อปิด/ซ่อนแท็บ */
+let studentVisibilityHooked=false;
+function stopStudentNoticePoll(){if(studentNoticePoll){clearInterval(studentNoticePoll);studentNoticePoll=null}}
+function startStudentNoticePoll(){stopStudentNoticePoll();if(document.hidden)return;studentNoticePoll=setInterval(fetchStudentNoticeQueue,STUDENT_POLL_MS)}
 function startStudentNotificationQueue(){
- if(studentNoticePoll)clearInterval(studentNoticePoll);
+ stopStudentNoticePoll();
  fetchStudentNoticeQueue();
- studentNoticePoll=setInterval(fetchStudentNoticeQueue,5000);
- document.addEventListener('visibilitychange',()=>{if(!document.hidden)fetchStudentNoticeQueue()});
+ startStudentNoticePoll();
+ if(!studentVisibilityHooked){
+  studentVisibilityHooked=true;
+  document.addEventListener('visibilitychange',()=>{
+   if(!studentToken)return;
+   if(document.hidden)stopStudentNoticePoll();
+   else{fetchStudentNoticeQueue();startStudentNoticePoll()}
+  });
+ }
 }
 
 async function openStudentNotificationHistory(){
@@ -809,7 +820,7 @@ async function checkMembership(){
     if(r&&r.my_role!==me.role){await loadTeacher();if(!$('#modalback').classList.contains('show'))renderTeacher();if(me.role==='owner')toast(`คุณได้รับแต่งตั้งเป็นเจ้าของห้อง "${prevName}" แล้ว`)}
   }catch(e){}
 }
-setInterval(checkMembership,20000);
+setInterval(()=>{if(!document.hidden)checkMembership()},20000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)checkMembership()});
 guardOnce(['doPromoteTeacher','doRemoveTeacher']);
 
