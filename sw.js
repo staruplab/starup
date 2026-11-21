@@ -1,7 +1,74 @@
-/* STAR UP! student PWA — independent scope and cache */
-const CACHE_NAME = 'star-up-student-v26-quiz';
-const BASE=new URL(self.registration.scope);
-const CORE=['','index.html','manifest.webmanifest','logo-star-up.jpg','logo-star-up-transparent.png','icon-192.png','icon-512.png','apple-touch-icon.png','favicon-32.png'].map(p=>new URL(p,BASE).href);
-self.addEventListener('install',e=>e.waitUntil((async()=>{const c=await caches.open(CACHE_NAME);await Promise.all(CORE.map(async u=>{try{const r=await fetch(u,{cache:'reload'});if(r.ok)await c.put(u,r)}catch{}}));await self.skipWaiting()})()));
-self.addEventListener('activate',e=>e.waitUntil((async()=>{const ks=await caches.keys();await Promise.all(ks.filter(k=>k.startsWith('star-up-student-')&&k!==CACHE_NAME).map(k=>caches.delete(k)));await self.clients.claim()})()));
-self.addEventListener('fetch',e=>{const r=e.request,u=new URL(r.url);if(r.method!=='GET'||u.origin!==self.location.origin||!u.pathname.startsWith(BASE.pathname))return;if(r.mode==='navigate'){e.respondWith((async()=>{try{const x=await fetch(r);if(x.ok){const c=await caches.open(CACHE_NAME);await c.put(new URL('index.html',BASE).href,x.clone())}return x}catch{return (await caches.match(new URL('index.html',BASE).href))||Response.error()}})());return}e.respondWith((async()=>{const c=await caches.open(CACHE_NAME),hit=await c.match(r);if(hit)return hit;const x=await fetch(r);if(x.ok)await c.put(r,x.clone());return x})())});
+/* STAR UP! PWA service worker — GitHub Pages /starup/ */
+const CACHE_NAME = 'star-up-pwa-v25-quiz';
+const BASE = new URL(self.registration.scope);
+const CORE_FILES = [
+  '',
+  'index.html',
+  'manifest.webmanifest',
+  'manifest-teacher.webmanifest',
+  'manifest-student.webmanifest',
+  'manifest.json',
+  'logo-star-up.jpg',
+  'logo-star-up-transparent.png',
+  'icon-192.png',
+  'icon-512.png',
+  'apple-touch-icon.png',
+  'favicon-32.png'
+].map(path => new URL(path, BASE).href);
+
+self.addEventListener('install', event => {
+  event.waitUntil((async () => {
+    const cache = await caches.open(CACHE_NAME);
+    // Cache core files individually so one optional icon cannot block installation.
+    await Promise.all(CORE_FILES.map(async url => {
+      try {
+        const response = await fetch(url, {cache: 'reload'});
+        if (response.ok) await cache.put(url, response);
+      } catch (error) {
+        // A missing optional file should not prevent the PWA from installing.
+      }
+    }));
+    await self.skipWaiting();
+  })());
+});
+
+self.addEventListener('activate', event => {
+  event.waitUntil((async () => {
+    const keys = await caches.keys();
+    await Promise.all(keys.filter(key => key.startsWith('star-up-pwa-') && key !== CACHE_NAME).map(key => caches.delete(key)));
+    await self.clients.claim();
+  })());
+});
+
+self.addEventListener('fetch', event => {
+  const request = event.request;
+  const url = new URL(request.url);
+  if (request.method !== 'GET' || url.origin !== self.location.origin || !url.pathname.startsWith(BASE.pathname)) return;
+
+  if (request.mode === 'navigate') {
+    event.respondWith((async () => {
+      try {
+        const response = await fetch(request);
+        if (response && response.ok) {
+          const cache = await caches.open(CACHE_NAME);
+          await cache.put(new URL('index.html', BASE).href, response.clone());
+        }
+        return response;
+      } catch (error) {
+        return (await caches.match(new URL('index.html', BASE).href)) || Response.error();
+      }
+    })());
+    return;
+  }
+
+  event.respondWith((async () => {
+    const cached = await caches.match(request);
+    if (cached) return cached;
+    const response = await fetch(request);
+    if (response && response.ok) {
+      const cache = await caches.open(CACHE_NAME);
+      await cache.put(request, response.clone());
+    }
+    return response;
+  })());
+});
