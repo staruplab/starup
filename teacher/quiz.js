@@ -1,6 +1,6 @@
 /* STAR UP! Quiz module — ใช้ร่วมกันทั้งหน้าครูและนักเรียน (ต้องรัน migration_quiz_system.sql ก่อน) */
 (function(){
-const Q={lib:[],sessions:[],attempts:[],room:null,loaded:false,ch:null,chRoom:null,timer:null,clock:null,wizardStep:1};
+const Q={lib:[],sessions:[],attempts:[],dailySchedules:[],room:null,loaded:false,ch:null,chRoom:null,timer:null,clock:null,wizardStep:1,lastSchedulerTick:0};
 const num=(v,d)=>{v=Number(v);return Number.isFinite(v)?v:d};
 function chan(room,onMsg){if(!(typeof supa!=='undefined'&&supa)||!room)return null;if(Q.ch&&Q.chRoom===room)return Q.ch;try{if(Q.ch)supa.removeChannel(Q.ch)}catch(e){}Q.chRoom=room;Q.ch=supa.channel('quiz:'+room,{config:{broadcast:{self:false}}});if(onMsg)Q.ch.on('broadcast',{event:'q'},onMsg);Q.ch.subscribe();return Q.ch}
 function ping(){try{chan(activeRoom)?.send({type:'broadcast',event:'q',payload:{t:Date.now()}})}catch(e){}}
@@ -10,10 +10,12 @@ const isTeacherPage=()=>typeof renderTeacher==='function'&&typeof teacherContent
 async function quizLoad(){
   if(!(typeof supa!=='undefined'&&supa)||!activeRoom)return;const room=activeRoom;
   try{
+    if(Date.now()-Q.lastSchedulerTick>30000){Q.lastSchedulerTick=Date.now();await supa.rpc('quiz_scheduler_tick')}
     const [a,b]=await Promise.all([supa.from('quizzes').select('*,quiz_questions(*)').eq('teacher_id',user.id).order('updated_at',{ascending:false}),
       supa.from('quiz_sessions').select('*').eq('classroom_id',room).order('created_at',{ascending:false}).limit(12)]);
     if(a.error)throw a.error;if(b.error)throw b.error;
     Q.lib=a.data||[];Q.sessions=b.data||[];Q.room=room;Q.loaded=true;
+    const ds=await supa.rpc('teacher_list_daily_quiz_schedules',{p_classroom_id:room});Q.dailySchedules=ds.error?[]:(ds.data||[]);
     const live=Q.sessions.find(s=>s.status!=='finished');
     if(live){const r=await supa.from('quiz_attempts').select('student_id,submitted_at,started_at,answers').eq('session_id',live.id);Q.attempts=r.data||[]}else Q.attempts=[];
     if(view==='quiz')renderTeacher();
@@ -42,7 +44,7 @@ function quizTeacherPage(){
   const hist=Q.sessions.filter(s=>s.status==='finished');
   const row=s=>`<div class="listrow"><div><b>${esc(s.title)}</b><div class="tiny muted">${new Date(s.created_at).toLocaleString('th-TH')}</div></div><button class="btn soft small" onclick="quizResults('${s.id}')">ดูผล</button></div>`;
   const histHtml=Q.histOpen?(hist.length?hist.slice(0,Q.histLimit).map(row).join('')+(hist.length>Q.histLimit?`<button class="btn soft" style="width:100%;margin-top:10px" onclick="quizHistMore()">ดูเพิ่มเติม (${hist.length-Q.histLimit} รายการ)</button>`:''):'<div class="empty">ยังไม่มีประวัติ Quiz ในห้องนี้</div>'):'';
-  return `<section class="panel"><div class="split"><div><h3>🧠 จัดการ Quiz</h3><div class="tiny muted">เปิด Quiz ให้ทั้งห้องทำพร้อมกัน ดูสถานะสดและผลคะแนนได้ที่นี่</div></div><div class="actions"><button class="btn soft" onclick="quizLibrary()">📚 คลัง Quiz</button><button class="btn primary" onclick="quizEdit(null)">＋ สร้าง Quiz</button></div></div><div style="margin:16px 0 8px;padding:10px 12px;border-radius:12px;background:#f2efff;color:#5546a3;font-weight:800">🟢 Quiz ที่กำลังดำเนินอยู่ (${live?1:0})</div>${liveHtml}<div class="split" style="margin-top:16px"><div><strong>🗂️ ประวัติ Quiz</strong><div class="tiny muted">ผลคะแนนและอันดับของแต่ละรอบ</div></div><button class="btn soft" onclick="quizHistToggle()">${Q.histOpen?'ซ่อนประวัติ':'ดูประวัติ Quiz'}</button></div>${histHtml}</section>`;
+  return `<section class="panel"><div class="split"><div><h3>🧠 จัดการ Quiz</h3><div class="tiny muted">เปิด Quiz ให้ทั้งห้องทำพร้อมกัน ดูสถานะสดและผลคะแนนได้ที่นี่</div></div><div class="actions"><button class="btn soft" onclick="quizLibrary()">📚 คลัง Quiz</button><button class="btn primary" onclick="quizEdit(null)">＋ สร้าง Quiz</button></div></div><div style="margin:16px 0 8px;padding:10px 12px;border-radius:12px;background:#f2efff;color:#5546a3;font-weight:800">🟢 Quiz ที่กำลังดำเนินอยู่ (${live?1:0})</div>${liveHtml}<section class="panel" style="margin-top:14px"><div class="split"><div><strong>🔁 Quiz ประจำวัน</strong><div class="tiny muted">ระบบเปิด Quiz อัตโนมัติตามวันที่และเวลาที่กำหนด</div></div><span class="badge">${Q.dailySchedules.filter(x=>x.active).length} ตาราง</span></div>${Q.dailySchedules.filter(x=>x.active).map(x=>`<div class="listrow"><div><b>${esc(x.quiz_title||'Quiz')}</b><div class="tiny muted">${String(x.start_time||'').slice(0,5)} น. · ${(x.repeat_days||[]).length===7?'ทุกวัน':(x.repeat_days||[]).map(d=>['','จ','อ','พ','พฤ','ศ','ส','อา'][d]).join(' ')}</div></div><button class="btn red small" onclick="quizCancelDaily('${x.id}')">ปิดตาราง</button></div>`).join('')||'<div class="empty">ยังไม่มี Quiz ประจำวัน</div>'}</section><div class="split" style="margin-top:16px"><div><strong>🗂️ ประวัติ Quiz</strong><div class="tiny muted">ผลคะแนนและอันดับของแต่ละรอบ</div></div><button class="btn soft" onclick="quizHistToggle()">${Q.histOpen?'ซ่อนประวัติ':'ดูประวัติ Quiz'}</button></div>${histHtml}</section>`;
 }
 window.quizLibrary=()=>{
   const live=Q.sessions.find(s=>s.status!=='finished');
@@ -96,25 +98,37 @@ window.quizOpen=id=>{
   modal(`<h3>🚀 เปิดใช้ Quiz: ${esc(z.title)}</h3>
     <p class="tiny muted">เลือกเริ่มทันที หรือกำหนดวันและเวลาให้ระบบเริ่มอัตโนมัติ</p>
     <div class="panel" style="padding:12px;margin:10px 0">
-      <label style="display:block;margin:6px 0"><input type="radio" name="qzStartMode" value="now" checked onchange="document.getElementById('qzScheduleFields').hidden=true"> เริ่มทันที (ครูเป็นผู้กดเริ่ม)</label>
-      <label style="display:block;margin:6px 0"><input type="radio" name="qzStartMode" value="scheduled" onchange="document.getElementById('qzScheduleFields').hidden=false"> กำหนดวันและเวลา เริ่มอัตโนมัติ</label>
+      <label style="display:block;margin:6px 0"><input type="radio" name="qzStartMode" value="now" checked onchange="quizStartModeChanged()"> เริ่มทันที (ครูเป็นผู้กดเริ่ม)</label>
+      <label style="display:block;margin:6px 0"><input type="radio" name="qzStartMode" value="scheduled" onchange="quizStartModeChanged()"> กำหนดวันและเวลา เริ่มครั้งเดียวอัตโนมัติ</label>
+      <label style="display:block;margin:6px 0"><input type="radio" name="qzStartMode" value="daily" onchange="quizStartModeChanged()"> Quiz ประจำวัน เริ่มอัตโนมัติตามตาราง</label>
       <div id="qzScheduleFields" hidden style="margin-top:12px">
         <label>วันและเวลาเริ่ม</label><input class="field" id="qzScheduledAt" type="datetime-local" value="${local}" min="${local}">
         <div class="tiny muted">ระบบใช้เวลาเขตประเทศไทย (Asia/Bangkok) และเริ่มตามเวลาที่กำหนด</div>
       </div>
+      <div id="qzDailyFields" hidden style="margin-top:12px">
+        <label>เวลาเริ่มประจำวัน</label><input class="field" id="qzDailyTime" type="time" value="08:00">
+        <label style="display:block;margin:10px 0 6px">วันที่ให้เปิด Quiz</label>
+        <div class="row" style="gap:7px;flex-wrap:wrap">${[[1,'จ'],[2,'อ'],[3,'พ'],[4,'พฤ'],[5,'ศ'],[6,'ส'],[7,'อา']].map(([d,n])=>`<label class="badge" style="cursor:pointer"><input type="checkbox" class="qzDailyDay" value="${d}" checked> ${n}</label>`).join('')}</div>
+        <div class="tiny muted" style="margin-top:7px">เมื่อถึงเวลานี้ในวันที่เลือก ระบบจะเปิด Quiz และเริ่มจับเวลาเองทุกวัน ไม่ต้องให้ครูกดเริ่ม</div>
+      </div>
     </div>
     <div class="modalfoot"><button class="btn white" onclick="closeModal()">ยกเลิก</button><button class="btn primary" onclick="quizConfirmOpen('${id}')">ยืนยันเปิด Quiz</button></div>`)
 };
+window.quizStartModeChanged=()=>{const mode=document.querySelector('input[name="qzStartMode"]:checked')?.value||'now';const a=$('#qzScheduleFields'),b=$('#qzDailyFields');if(a)a.hidden=mode!=='scheduled';if(b)b.hidden=mode!=='daily'};
 window.quizConfirmOpen=async id=>{
-  const mode=document.querySelector('input[name="qzStartMode"]:checked')?.value||'now';
-  let r;
+  const mode=document.querySelector('input[name="qzStartMode"]:checked')?.value||'now';let r;
   if(mode==='scheduled'){
     const raw=$('#qzScheduledAt')?.value;if(!raw)return toast('กรุณากำหนดวันและเวลา');
     const dt=new Date(raw);if(!Number.isFinite(dt.getTime())||dt.getTime()<=Date.now()+5000)return toast('เวลาเริ่มต้องเป็นเวลาในอนาคต');
     r=await rpcDo('teacher_schedule_quiz',{p_quiz_id:id,p_classroom_id:activeRoom,p_scheduled_start_at:dt.toISOString()},'ตั้งเวลา Quiz แล้ว ระบบจะเริ่มให้อัตโนมัติตามกำหนด');
+  }else if(mode==='daily'){
+    const tm=$('#qzDailyTime')?.value,days=[...document.querySelectorAll('.qzDailyDay:checked')].map(x=>Number(x.value));
+    if(!tm)return toast('กรุณากำหนดเวลาเริ่มประจำวัน');if(!days.length)return toast('กรุณาเลือกวันที่อย่างน้อย 1 วัน');
+    r=await rpcDo('teacher_create_daily_quiz_schedule',{p_quiz_id:id,p_classroom_id:activeRoom,p_start_time:tm,p_repeat_days:days},'ตั้ง Quiz ประจำวันแล้ว ระบบจะเปิดให้อัตโนมัติตามตาราง');
   }else r=await rpcDo('teacher_open_quiz',{p_quiz_id:id,p_classroom_id:activeRoom},'เปิด Quiz แล้ว นักเรียนจะเห็นหน้าต่างแจ้งเตือน');
   if(r)closeModal();
 };
+window.quizCancelDaily=id=>askConfirmButtons('ปิดตาราง Quiz ประจำวันนี้หรือไม่? รอบที่เริ่มไปแล้วจะไม่ถูกลบ','ปิดตาราง',()=>rpcDo('teacher_cancel_daily_quiz_schedule',{p_schedule_id:id},'ปิดตาราง Quiz ประจำวันแล้ว'));
 window.quizBegin=id=>rpcDo('teacher_begin_quiz',{p_session:id},'เริ่ม Quiz แล้ว');
 window.quizPause=id=>rpcDo('teacher_pause_quiz',{p_session:id},'พัก Quiz แล้ว');
 window.quizResume=id=>rpcDo('teacher_resume_quiz',{p_session:id},'ทำ Quiz ต่อแล้ว');
@@ -143,7 +157,7 @@ function seeded(seed){let h=1779033703^seed.length;for(let i=0;i<seed.length;i++
 function shuf(a,rnd){a=[...a];for(let i=a.length-1;i>0;i--){const j=Math.floor(rnd()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
 function overlay(html){let o=document.getElementById('quizOverlay');if(!o){o=document.createElement('div');o.id='quizOverlay';o.style.cssText='position:fixed;inset:0;z-index:80;background:#f7f3ff;overflow:auto;padding:14px;font-family:inherit';document.body.append(o)}o.innerHTML=`<div style="max-width:560px;margin:0 auto">${html}</div>`}
 function hideOverlay(){document.getElementById('quizOverlay')?.remove()}
-function fab(on,id){let b=document.getElementById('quizFab');if(!on){b?.remove();return}if(b)return;b=document.createElement('button');b.id='quizFab';b.className='btn primary';b.style.cssText='position:fixed;right:14px;bottom:70px;z-index:79;box-shadow:0 4px 14px rgba(0,0,0,.25)';b.textContent='🧠 เข้าทำ Quiz';b.onclick=()=>{S.dismissed=null;S.entered.add(id);S.sig='';fab(false);sRender()};document.body.append(b)}
+function fab(on,id){let b=document.getElementById('quizFab');if(!on){b?.remove();return}if(b)return;b=document.createElement('button');b.id='quizFab';b.className='btn primary';b.style.cssText='position:fixed;right:14px;bottom:70px;z-index:79;box-shadow:0 4px 14px rgba(0,0,0,.25)';b.textContent='🧠 เข้าทำ Quiz';b.onclick=()=>{try{localStorage.removeItem(quizDismissKey(id))}catch(e){}S.dismissed=null;S.entered.add(id);S.sig='';fab(false);sRender()};document.body.append(b)}
 function popup(ses){try{typeof playUrgentSound==='function'&&playUrgentSound()}catch(e){}overlay(`<div class="panel center" style="margin-top:18vh"><div class="big">🧠📢</div><span class="badge">Quiz ใหม่!</span><h2>${esc(ses.title)}</h2><p>ครูเปิด Quiz แล้ว กดเข้าไปทำได้เลย</p><button class="btn primary" style="width:100%;margin-top:10px" onclick="quizEnter('${ses.id}')">เข้าทำ Quiz 🚀</button><button class="btn white small" style="margin-top:8px" onclick="quizDismiss('${ses.id}')">ไว้ก่อน</button></div>`)}
 window.quizEnter=id=>{S.entered.add(id);S.sig='';fab(false);sRender()};
 async function sGet(){
@@ -154,7 +168,7 @@ async function sGet(){
     S.st=r.data;S.off=new Date(r.data.server_now).getTime()-Date.now();
     const ses=S.st.session;
     if(!ses){hideOverlay();fab(false);return}
-    if(S.dismissed===ses.id&&ses.status!=='finished'){hideOverlay();fab(true,ses.id);return}if(ses.status==='finished'&&S.dismissed===ses.id)S.dismissed=null;
+    if(quizWasDismissed(ses.id)){S.dismissed=ses.id;hideOverlay();if(ses.status!=='finished')fab(true,ses.id);else fab(false);return}
     if(ses.status==='finished'&&S.st.submitted){if(!S.res||S.res.sid!==ses.id||!S.res.ready){const x=await supa.rpc('student_get_quiz_result',{p_token:studentToken,p_session:ses.id});if(x.error)throw x.error;S.res={...x.data,sid:ses.id}}}
     sRender()
   }catch(e){console.warn('quiz state:',e);if(!S.errShown&&e&&e.message&&!/fetch|network/i.test(e.message)){S.errShown=true;toast('Quiz ใช้งานไม่ได้: '+e.message)}}
@@ -203,7 +217,7 @@ function sResult(){
   const medals=['🥇','🥈','🥉'];
   overlay(`<div role="dialog" aria-modal="true" aria-label="ผลคะแนน Quiz" style="max-width:560px;margin:10px auto;background:#f7f3ff;border-radius:18px;padding:10px;box-shadow:0 12px 40px rgba(0,0,0,.22)"><div class="row" style="justify-content:flex-end"><button class="btn white small" aria-label="ปิดหน้าต่างผลคะแนน" onclick="quizDismiss('${ses.id}')">✕ ปิด</button></div><div class="panel center"><div class="big">${r.makeup?'⏪':'🏆'}</div><span class="badge">Quiz สิ้นสุดแล้ว</span><h2>${esc(r.title)}</h2><div style="font-size:42px;font-weight:900;font-variant-numeric:tabular-nums">${r.score}/${r.max}</div><p style="font-size:18px;font-weight:700">ได้รับ ⭐ ${r.stars} ดาว</p><p>${r.makeup?'ถ้าทำในรอบสดจะได้อันดับประมาณ':'อันดับของคุณ'} ${r.my_rank??'-'}</p></div><div class="panel"><h3>🏆 ตารางคะแนน</h3>${(r.ranking||[]).map(x=>`<div class="listrow" style="${x.me?'background:#fff3c4':''}"><div class="row"><b class="rank">${medals[x.rank-1]||x.rank}</b><span>${esc(x.icon||'')} ${esc(x.name)}</span></div><b>${x.score}/${x.max}</b></div>`).join('')}</div><div class="panel"><h3>✅ เฉลย</h3>${(r.review||[]).map((q,i)=>`<div style="margin:10px 0"><b>${i+1}. ${esc(q.body)}</b>${q.choices.map((c,k)=>`<div style="padding:5px 8px;border-radius:8px;margin:3px 0;background:${k===q.correct_index?'#d9f5df':k===q.my_answer?'#ffdede':'transparent'}">${k===q.correct_index?'✅':k===q.my_answer?'❌':'▫️'} ${esc(c)}${k===q.my_answer?' ← คำตอบของคุณ':''}</div>`).join('')}${q.my_answer==null?'<div class="tiny muted">ไม่ได้ตอบข้อนี้</div>':''}</div>`).join('')}</div><button class="btn primary" style="width:100%;position:sticky;bottom:8px" onclick="quizDismiss('${ses.id}')">ปิดหน้าต่างผลคะแนน</button></div>`);
 }
-window.quizDismiss=id=>{S.dismissed=id;hideOverlay();const s=S.st?.session;if(s&&s.status!=='finished')fab(true,id)};
+window.quizDismiss=id=>{quizRememberDismissed(id);hideOverlay();const s=S.st?.session;if(s&&s.status!=='finished')fab(true,id);else fab(false)};
 window.quizAnswer=async(sid,q,k)=>{
   const key=`${sid}:${q}`;if(S.answerBusy.has(key)||S.st?.submitted)return;S.answerBusy.add(key);
   const buttons=[...document.querySelectorAll(`[data-quiz-question="${q}"]`)];buttons.forEach(b=>b.disabled=true);
