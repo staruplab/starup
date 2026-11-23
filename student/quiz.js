@@ -174,7 +174,7 @@ async function sGet(){
     S.st=r.data;S.off=new Date(r.data.server_now).getTime()-Date.now();
     const ses=S.st.session;
     const tabSig=JSON.stringify([ses?.id,ses?.status,S.st.submitted]);
-    if(S.tabSig!==tabSig){S.tabSig=tabSig;if(typeof studentTab!=='undefined'&&studentTab==='quiz'&&typeof renderStudent==='function')setTimeout(renderStudent,0)}
+    if(S.tabSig!==tabSig){S.tabSig=tabSig;dLoad();if(typeof studentTab!=='undefined'&&studentTab==='quiz'&&typeof renderStudent==='function')setTimeout(renderStudent,0)}
     if(!ses){hideOverlay();fab(false);return}
     if(quizWasDismissed(ses.id)){S.dismissed=ses.id;hideOverlay();if(ses.status!=='finished')fab(true,ses.id);else fab(false);return}
     S.dismissed=null;
@@ -210,8 +210,9 @@ function quizThresholdWarnings(kind,id,left){
   if(left<=60&&left>0)quizReminder(`${kind}:${id}:60`,kind==='start'?'Quiz จะเริ่มใน 1 นาที':'เหลือเวลาทำ Quiz อีก 1 นาที');
 }
 function sClock(){
-  const st=S.st,ses=st?.session;if(!ses)return;
-  document.querySelectorAll('[data-quiz-tab-end]').forEach(el=>{const left=Math.max(0,Math.ceil((Number(el.dataset.quizTabEnd)-now())/1000));el.textContent=`${el.dataset.quizTabPrefix||''} ${fmtLeft(left)}`;if(left===0&&!el.dataset.fired){el.dataset.fired='1';sGet()}});
+  const st=S.st,ses=st?.session;
+  document.querySelectorAll('[data-quiz-tab-end]').forEach(el=>{const left=Math.max(0,Math.ceil((Number(el.dataset.quizTabEnd)-now())/1000));el.textContent=`${el.dataset.quizTabPrefix||''} ${fmtLeft(left)}`;if(left===0&&!el.dataset.fired){el.dataset.fired='1';sGet();setTimeout(dLoad,1500)}});
+  if(!ses)return;
   const scheduleEl=document.getElementById('quizScheduleClock');
   if(scheduleEl){const left=Math.max(0,Math.ceil((new Date(ses.scheduled_start_at||0).getTime()-now())/1000));scheduleEl.textContent=`${Math.floor(left/60)}:${String(left%60).padStart(2,'0')}`;quizThresholdWarnings('start',ses.id,left);if(left===0)sGet();return}
   const waitEl=document.getElementById('quizWaitClock');
@@ -288,10 +289,64 @@ function quizHistoryPage(){
     <div class="tiny muted">ผู้ทำ ${x.count} คน • คะแนนสูงสุด ${x.top??'-'}${x.avg!=null?' • เฉลี่ย '+x.avg:''}</div>
     ${x.participated?`<button class="btn white small" style="margin-top:6px" onclick="quizHReview('${x.id}')">${rv?'ซ่อนเฉลย':'ดูเฉลย'}</button>`:''}
     ${rv?`<div style="margin-top:8px">${(rv.review||[]).map((q,i)=>`<div style="margin:8px 0"><b>${i+1}. ${esc(q.body)}</b>${q.choices.map((c,k)=>`<div style="padding:4px 8px;border-radius:8px;margin:2px 0;background:${k===q.correct_index?'#d9f5df':k===q.my_answer?'#ffdede':'transparent'}">${k===q.correct_index?'✅':k===q.my_answer?'❌':'▫️'} ${esc(c)}${k===q.my_answer?' ← คำตอบของคุณ':''}</div>`).join('')}</div>`).join('')}</div>`:''}</details>`}).join('');
-  return quizActiveCard()+`<section class="panel"><h3>📚 ประวัติ Quiz ของฉัน</h3><div class="row" style="gap:6px;flex-wrap:wrap;align-items:end"><label class="tiny">ตั้งแต่<br><input type="date" class="field" id="qhFrom" value="${H.from}" onchange="quizHFilter()"></label><label class="tiny">ถึง<br><input type="date" class="field" id="qhTo" value="${H.to}" onchange="quizHFilter()"></label></div><div class="row" style="gap:6px;margin-top:8px;flex-wrap:wrap"><button class="btn white small" onclick="quizHQuick(7)">7 วันล่าสุด</button><button class="btn white small" onclick="quizHQuick(30)">30 วันล่าสุด</button><button class="btn white small" onclick="quizHQuick(0)">ทั้งหมด</button></div></section>
+  const dIds=new Set((D.list||[]).map(x=>x.session_id).filter(Boolean));
+  return quizDailySection()+(S.st?.session&&dIds.has(S.st.session.id)?'':quizActiveCard())+`<section class="panel"><h3>📚 ประวัติ Quiz ของฉัน</h3><div class="row" style="gap:6px;flex-wrap:wrap;align-items:end"><label class="tiny">ตั้งแต่<br><input type="date" class="field" id="qhFrom" value="${H.from}" onchange="quizHFilter()"></label><label class="tiny">ถึง<br><input type="date" class="field" id="qhTo" value="${H.to}" onchange="quizHFilter()"></label></div><div class="row" style="gap:6px;margin-top:8px;flex-wrap:wrap"><button class="btn white small" onclick="quizHQuick(7)">7 วันล่าสุด</button><button class="btn white small" onclick="quizHQuick(30)">30 วันล่าสุด</button><button class="btn white small" onclick="quizHQuick(0)">ทั้งหมด</button></div></section>
   <section class="panel"><div class="row" style="gap:14px;flex-wrap:wrap"><div><b style="font-size:22px">${took.length}</b><div class="tiny muted">Quiz ที่ทำ</div></div><div><b style="font-size:22px">${avg}%</b><div class="tiny muted">คะแนนเฉลี่ยของฉัน</div></div><div><b style="font-size:22px">⭐${stars}</b><div class="tiny muted">ดาวจาก Quiz</div></div></div></section>
   <section class="panel"><div class="row" style="justify-content:space-between;gap:6px;flex-wrap:wrap"><h3>รายการ Quiz (${L.length})</h3><div><button class="btn white small" onclick="quizHAll(true)">ขยายทั้งหมด</button> <button class="btn white small" onclick="quizHAll(false)">ย่อทั้งหมด</button></div></div>${H.loading&&!L.length?'<p class="muted">กำลังโหลด…</p>':H.err?`<p class="muted">โหลดไม่สำเร็จ: ${esc(H.err)}</p>`:(cards?cards+(L.length>H.limit?`<button class="btn soft" style="width:100%;margin-top:8px" onclick="quizHMore()">แสดงเพิ่ม (${L.length-H.limit})</button>`:''):'<p class="muted">ไม่พบ Quiz ในช่วงวันที่นี้</p>')}</section>`;
 }
+
+/* ===== Quiz ประจำวัน (หน้าฝั่งนักเรียน) ===== */
+const D={list:null,loading:false,again:false,err:'',timer:null};
+const DNAMES=['','จ','อ','พ','พฤ','ศ','ส','อา'];
+function dLoad(){
+  if(typeof studentToken==='undefined'||!studentToken||(typeof previewMode!=='undefined'&&previewMode)||!(typeof supa!=='undefined'&&supa))return;
+  if(D.loading){D.again=true;return}
+  D.loading=true;D.err='';
+  Promise.resolve(supa.rpc('student_get_daily_quizzes',{p_token:studentToken})).then(r=>{if(r.error)throw r.error;D.list=r.data||[]})
+    .catch(e=>{D.err=e.message||String(e);if(!D.list)D.list=[]})
+    .finally(()=>{
+      D.loading=false;clearTimeout(D.timer);
+      const nx=(D.list||[]).filter(x=>x.state==='upcoming'&&x.scheduled_start_at).map(x=>new Date(x.scheduled_start_at).getTime()-now()).filter(ms=>ms>-1500).sort((a,b)=>a-b)[0];
+      if(nx!=null)D.timer=setTimeout(dLoad,Math.min(nx+2500,2147000000));
+      if(D.again){D.again=false;return dLoad()}
+      if(typeof studentTab!=='undefined'&&studentTab==='quiz'&&typeof renderStudent==='function')renderStudent();else quizPaintBadge();
+    });
+}
+const dTodo=()=>(D.list||[]).filter(x=>x.state==='open'||x.state==='makeup').length;
+function quizPaintBadge(){
+  const b=[...document.querySelectorAll('.student-tabs .tab')].find(x=>/studentTab='quiz'/.test(x.getAttribute('onclick')||''));if(!b)return;
+  const n=dTodo();b.innerHTML='🧠 Quiz'+(n?`<span class="tab-alert">${n}</span>`:'');
+}
+function dStreak(x){if(x.state==='missed')return 0;let n=x.state==='done'?1:0;for(const r of(x.recent||[])){if(r.done)n++;else break}return n}
+window.quizDailyStart=sid=>{
+  if(S.st?.session?.id===sid)return quizEnter(sid);
+  sGet().then(()=>{if(S.st?.session?.id===sid)quizEnter(sid);else toast('ยังเข้าทำ Quiz นี้ไม่ได้ในตอนนี้ ลองใหม่อีกครั้ง')});
+};
+function quizDailySection(){
+  if(D.list===null&&!D.loading)dLoad();
+  if(D.err&&!(D.list||[]).length)return `<section class="panel"><div class="tiny muted">โหลด Quiz ประจำวันไม่สำเร็จ: ${esc(D.err)}</div></section>`;
+  const L=D.list||[];if(!L.length)return '';
+  const clk=(ts,prefix)=>`<div data-quiz-tab-end="${ts}" data-quiz-tab-prefix="${prefix}" style="font-size:22px;font-weight:800;font-variant-numeric:tabular-nums;margin:6px 0">--:--</div>`;
+  const pill=(t,bg,fg)=>`<span class="badge" style="background:${bg};color:${fg}">${t}</span>`;
+  const card=x=>{
+    const days=(x.repeat_days||[]).length===7?'ทุกวัน':(x.repeat_days||[]).map(d=>DNAMES[d]).join(' '),sk=dStreak(x);
+    const dots=(x.recent||[]).slice(0,7).reverse().map(r=>`<span title="${esc(dth(r.date+'T00:00:00'))}" style="margin-right:3px">${r.done?'✅':'❌'}</span>`).join('');
+    let st='';
+    switch(x.state){
+      case 'done':st=x.stars!=null?pill(`✅ วันนี้ทำแล้ว · ได้ ${Number(x.stars)||0} ⭐ (${x.score}/${x.max})`,'#e3f7eb','#237b4e'):pill('✅ วันนี้ทำแล้ว · ส่งคำตอบแล้ว','#e3f7eb','#237b4e')+`<div class="tiny muted" style="margin-top:4px">ดาวและเฉลยจะแสดงเมื่อหมดเวลา${x.score!=null?` · ตอนนี้ได้ ${x.score}/${x.max}`:''}</div>`;st+='<button class="btn white" style="width:100%;margin-top:8px" disabled>ทำครบแล้ววันนี้ พรุ่งนี้มาใหม่นะ</button>';break;
+      case 'open':st=clk(new Date(x.ends_at||0).getTime(),'เหลือเวลา')+`<button class="btn primary" style="width:100%" onclick="quizDailyStart('${x.session_id}')">▶ เริ่มทำ Quiz วันนี้</button>`;break;
+      case 'makeup':st=pill('⏪ คุณครูเปิดให้ทำย้อนหลัง','#fff3d8','#94600e')+`<button class="btn primary" style="width:100%;margin-top:8px" onclick="quizDailyStart('${x.session_id}')">▶ ทำย้อนหลัง</button>`;break;
+      case 'upcoming':st=`<div class="tiny muted">🗓️ วันนี้เริ่ม ${String(x.start_time||'').slice(0,5)} น.</div>`+clk(new Date(x.scheduled_start_at||0).getTime(),'เริ่มในอีก')+'<button class="btn white" style="width:100%" disabled>▶ เริ่มทำ (รอถึงเวลา)</button>';break;
+      case 'paused':st=pill('⏸ ครูพัก Quiz ชั่วคราว','#fff3d8','#94600e');break;
+      case 'missed':st=pill('⌛ วันนี้ไม่ได้ทำ · หมดเวลาแล้ว','#fde8eb','#a43d54');break;
+      case 'rest':st=pill('😴 วันนี้ไม่มีรอบ','#eef0f6','#5b6478')+`<div class="tiny muted" style="margin-top:4px">มี Quiz ${days}</div>`;break;
+      default:st=pill('วันนี้ไม่มีรอบ Quiz','#eef0f6','#5b6478');
+    }
+    return `<article class="itemcard student-mission-card"><div class="student-mission-top"><div class="emoji">🧠</div><span class="badge">Quiz ประจำวัน</span></div><h4>${esc(x.title)}</h4><div class="tiny muted">${String(x.start_time||'').slice(0,5)} น. · ${days} · ${x.question_count} ข้อ</div><div class="tiny muted">ทำสำเร็จแล้ว ${Number(x.done_total)||0} วัน · รวม ⭐ ${Number(x.stars_total)||0}${sk>=2?` · 🔥 ติดต่อกัน ${sk} วัน`:''}</div>${dots?`<div class="tiny" style="margin:6px 0">7 รอบล่าสุด ${dots}</div>`:''}${st}</article>`;
+  };
+  return `<section class="panel" style="margin-bottom:14px"><div class="split"><div><h3>🔁 Quiz ประจำวัน</h3><div class="tiny muted">ทำได้วันละ 1 ครั้ง เริ่มใหม่ทุกวัน · อยู่ที่นี่จนกว่าครูจะปิด</div></div><span class="badge">${dTodo()} รอทำวันนี้</span></div><div class="grid cards">${L.map(card).join('')}</div></section>`;
+}
+if(typeof renderStudent==='function'){const _rs=renderStudent;window.renderStudent=renderStudent=function(){const r=_rs.apply(this,arguments);try{quizPaintBadge()}catch(e){}return r}}
 if(typeof studentContent==='function'){const _sc=studentContent;window.studentContent=studentContent=function(){return typeof studentTab!=='undefined'&&studentTab==='quiz'?quizHistoryPage():_sc.apply(this,arguments)}}
 const wait=setInterval(()=>{if(typeof studentToken!=='undefined'&&studentToken&&!isTeacherPage()||(typeof studentToken!=='undefined'&&studentToken&&typeof logoutStudent==='function')){clearInterval(wait);sStart()}},800);
 })();
