@@ -19,7 +19,7 @@ async function quizLoad(){
     if(view==='quiz')renderTeacher();
   }catch(e){toast('โหลด Quiz ไม่สำเร็จ (ต้องรัน migration_quiz_system.sql ก่อน): '+(e.message||e))}
 }
-function quizTick(){clearInterval(Q.timer);clearInterval(Q.clock);Q.timer=setInterval(()=>{if(view!=='quiz'||document.hidden||document.getElementById('modalback')?.classList.contains('show'))return;quizLoad()},7000);Q.clock=setInterval(()=>{document.querySelectorAll('[data-quiz-end]').forEach(el=>{const left=Math.max(0,Math.ceil((Number(el.dataset.quizEnd)-Date.now())/1000));el.textContent=`เวลาเหลือ ${Math.floor(left/60)}:${String(left%60).padStart(2,'0')}`;if(left===0)quizLoad()})},1000)}
+function quizTick(){clearInterval(Q.timer);clearInterval(Q.clock);Q.timer=setInterval(()=>{if(view!=='quiz'||document.hidden||document.getElementById('modalback')?.classList.contains('show'))return;quizLoad()},7000);Q.clock=setInterval(()=>{document.querySelectorAll('[data-quiz-end]').forEach(el=>{const left=Math.max(0,Math.ceil((Number(el.dataset.quizEnd)-Date.now())/1000));el.textContent=`${el.dataset.quizPrefix||'เวลาเหลือ'} ${Math.floor(left/60)}:${String(left%60).padStart(2,'0')}`;if(left===0)quizLoad()})},1000)}
 Q.histOpen=false;Q.histLimit=5;
 const chip=(t,bg,fg)=>`<span class="badge" style="background:${bg};color:${fg}">${t}</span>`;
 window.quizHistToggle=()=>{Q.histOpen=!Q.histOpen;renderTeacher(isDemo())};
@@ -32,7 +32,7 @@ function quizTeacherPage(){
   const am=new Map(Q.attempts.map(a=>[a.student_id,a]));
   const done=roster.filter(s=>am.get(s.id)?.submitted_at),doing=roster.filter(s=>am.has(s.id)&&!am.get(s.id).submitted_at),wait=roster.filter(s=>!am.has(s.id));
   const names=a=>a.map(s=>esc(s.full_name)).join(', ')||'-',pct=roster.length?Math.round(done.length*100/roster.length):0,answered=a=>Object.keys(am.get(a.id)?.answers||{}).length;
-  const liveHtml=live?`<article class="itemcard" style="margin-top:8px"><div class="split"><h4 style="margin:0">${esc(live.title)}</h4>${chip(live.status==='lobby'?'⏳ รอเริ่ม':live.status==='paused'?'⏸ พักชั่วคราว':'🔴 กำลังทำ',live.status==='paused'?'#eee':'#fff3d8',live.status==='paused'?'#555':'#94600e')}</div><div class="tiny muted">ทำพร้อมกันด้วยเวลารวม • ${live.questions?.length||0} ข้อ • ${Math.round((live.time_limit_seconds||0)/60)} นาที</div>${live.status==='live'?`<div class="quiz-room-clock" data-quiz-end="${new Date(live.ends_at||0).getTime()}" style="font-size:24px;font-weight:800;text-align:center;margin:8px 0">กำลังนับเวลา…</div>`:''}
+  const liveHtml=live?`<article class="itemcard" style="margin-top:8px"><div class="split"><h4 style="margin:0">${esc(live.title)}</h4>${chip(live.status==='scheduled'?'🗓️ ตั้งเวลาแล้ว':live.status==='lobby'?'⏳ รอเริ่ม':live.status==='paused'?'⏸ พักชั่วคราว':'🔴 กำลังทำ',live.status==='paused'?'#eee':'#fff3d8',live.status==='paused'?'#555':'#94600e')}</div><div class="tiny muted">ทำพร้อมกันด้วยเวลารวม • ${live.questions?.length||0} ข้อ • ${Math.round((live.time_limit_seconds||0)/60)} นาที</div>${live.status==='scheduled'?`<div class="quiz-room-clock" data-quiz-end="${new Date(live.scheduled_start_at||0).getTime()}" data-quiz-prefix="เริ่มใน" style="font-size:24px;font-weight:800;text-align:center;margin:8px 0">รอเวลาเริ่ม…</div>`:live.status==='live'?`<div class="quiz-room-clock" data-quiz-end="${new Date(live.ends_at||0).getTime()}" style="font-size:24px;font-weight:800;text-align:center;margin:8px 0">กำลังนับเวลา…</div>`:''}
   <div style="background:#eee;border-radius:8px;height:10px;margin:10px 0"><div style="width:${pct}%;background:#34c38f;height:10px;border-radius:8px"></div></div>
   <div class="actions">${chip('👥 ทั้งห้อง '+roster.length,'#f2efff','#5546a3')}${chip('✍️ กำลังทำ '+doing.length,'#fff3d8','#94600e')}${chip('✅ เสร็จแล้ว '+done.length,'#e6f7ee','#2c7a4b')}${chip('⚪ ยังไม่ได้ทำ '+wait.length,'#fde8eb','#a43d54')}</div>
   <details open style="margin-top:8px"><summary><b>⚪ ยังไม่ได้ทำ (${wait.length})</b></summary><div class="tiny">${names(wait)}</div></details>
@@ -89,7 +89,32 @@ window.quizSave=async id=>{
 window.quizDuplicate=async id=>{try{const z=Q.lib.find(x=>x.id===id);if(!z)throw new Error('ไม่พบ Quiz ต้นฉบับ');const row={teacher_id:user.id,title:(z.title||'Quiz')+' (สำเนา)',description:z.description||'',mode:'self_paced',time_limit_seconds:z.time_limit_seconds||600,per_question_seconds:z.per_question_seconds||20,shuffle:!!z.shuffle,rank_bonus:[],star_rules:[]};const r=await supa.from('quizzes').insert(row).select().single();if(r.error)throw r.error;const qs=(z.quiz_questions||[]).map((q,i)=>({quiz_id:r.data.id,position:i,body:q.body,choices:q.choices,correct_index:q.correct_index,points:1}));if(qs.length){const a=await supa.from('quiz_questions').insert(qs);if(a.error)throw a.error}await quizLoad();quizLibrary();toast('คัดลอก Quiz แล้ว ต้นฉบับไม่เปลี่ยนแปลง')}catch(e){toast(e.message||String(e))}};
 window.quizDelete=id=>askConfirmButtons('ลบ Quiz นี้ออกจากคลัง? (ประวัติผลในห้องยังอยู่)','ลบ',async()=>{const r=await supa.from('quizzes').delete().eq('id',id);if(r.error)return toast(r.error.message);await quizLoad();quizLibrary()});
 async function rpcDo(name,args,msg){try{const r=await supa.rpc(name,args);if(r.error)throw r.error;ping();await quizLoad();if(msg)toast(msg);return r.data}catch(e){toast(e.message||String(e))}}
-window.quizOpen=async id=>{const r=await rpcDo('teacher_open_quiz',{p_quiz_id:id,p_classroom_id:activeRoom},'เปิด Quiz แล้ว นักเรียนจะเห็นหน้าต่างแจ้งเตือน');if(r)closeModal()};
+window.quizOpen=id=>{
+  const z=Q.lib.find(x=>x.id===id);if(!z)return toast('ไม่พบ Quiz ในคลัง');
+  const d=new Date(Date.now()+5*60000);d.setSeconds(0,0);d.setMinutes(Math.ceil(d.getMinutes()/5)*5);
+  const local=new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,16);
+  modal(`<h3>🚀 เปิดใช้ Quiz: ${esc(z.title)}</h3>
+    <p class="tiny muted">เลือกเริ่มทันที หรือกำหนดวันและเวลาให้ระบบเริ่มอัตโนมัติ</p>
+    <div class="panel" style="padding:12px;margin:10px 0">
+      <label style="display:block;margin:6px 0"><input type="radio" name="qzStartMode" value="now" checked onchange="document.getElementById('qzScheduleFields').hidden=true"> เริ่มทันที (ครูเป็นผู้กดเริ่ม)</label>
+      <label style="display:block;margin:6px 0"><input type="radio" name="qzStartMode" value="scheduled" onchange="document.getElementById('qzScheduleFields').hidden=false"> กำหนดวันและเวลา เริ่มอัตโนมัติ</label>
+      <div id="qzScheduleFields" hidden style="margin-top:12px">
+        <label>วันและเวลาเริ่ม</label><input class="field" id="qzScheduledAt" type="datetime-local" value="${local}" min="${local}">
+        <div class="tiny muted">ระบบใช้เวลาเขตประเทศไทย (Asia/Bangkok) และเริ่มตามเวลาที่กำหนด</div>
+      </div>
+    </div>
+    <div class="modalfoot"><button class="btn white" onclick="closeModal()">ยกเลิก</button><button class="btn primary" onclick="quizConfirmOpen('${id}')">ยืนยันเปิด Quiz</button></div>`)
+};
+window.quizConfirmOpen=async id=>{
+  const mode=document.querySelector('input[name="qzStartMode"]:checked')?.value||'now';
+  let r;
+  if(mode==='scheduled'){
+    const raw=$('#qzScheduledAt')?.value;if(!raw)return toast('กรุณากำหนดวันและเวลา');
+    const dt=new Date(raw);if(!Number.isFinite(dt.getTime())||dt.getTime()<=Date.now()+5000)return toast('เวลาเริ่มต้องเป็นเวลาในอนาคต');
+    r=await rpcDo('teacher_schedule_quiz',{p_quiz_id:id,p_classroom_id:activeRoom,p_scheduled_start_at:dt.toISOString()},'ตั้งเวลา Quiz แล้ว ระบบจะเริ่มให้อัตโนมัติตามกำหนด');
+  }else r=await rpcDo('teacher_open_quiz',{p_quiz_id:id,p_classroom_id:activeRoom},'เปิด Quiz แล้ว นักเรียนจะเห็นหน้าต่างแจ้งเตือน');
+  if(r)closeModal();
+};
 window.quizBegin=id=>rpcDo('teacher_begin_quiz',{p_session:id},'เริ่ม Quiz แล้ว');
 window.quizPause=id=>rpcDo('teacher_pause_quiz',{p_session:id},'พัก Quiz แล้ว');
 window.quizResume=id=>rpcDo('teacher_resume_quiz',{p_session:id},'ทำ Quiz ต่อแล้ว');
@@ -112,7 +137,7 @@ window.quizExportXlsx=async sid=>{try{await quizLoadExcelLib();const s=Q.session
 if(isTeacherPage()){const _tc=teacherContent;window.teacherContent=teacherContent=function(){return view==='quiz'?quizTeacherPage():_tc.apply(this,arguments)}}
 
 /* ================= ฝั่งนักเรียน ================= */
-const S={entered:new Set(),errShown:false,st:null,off:0,dismissed:null,res:null,timer:null,poll:null,busy:false,tick:null,sig:''};
+const S={entered:new Set(),errShown:false,st:null,off:0,dismissed:null,res:null,timer:null,poll:null,busy:false,tick:null,sig:'',warned:new Set(),answerBusy:new Set()};
 const now=()=>Date.now()+S.off;
 function seeded(seed){let h=1779033703^seed.length;for(let i=0;i<seed.length;i++){h=Math.imul(h^seed.charCodeAt(i),3432918353);h=h<<13|h>>>19}return()=>{h=Math.imul(h^h>>>16,2246822507);h=Math.imul(h^h>>>13,3266489909);h^=h>>>16;return(h>>>0)/4294967296}}
 function shuf(a,rnd){a=[...a];for(let i=a.length-1;i>0;i--){const j=Math.floor(rnd()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
@@ -137,32 +162,58 @@ async function sGet(){
 }
 function sRender(){
   const st=S.st,ses=st?.session;if(!ses)return;
-  const sig=JSON.stringify([ses.id,ses.status,ses.current_index,st.submitted,st.makeup,st.attempt_started_at,Object.keys(st.my_answers||{}).length,S.res?.ready]);
+  const sig=JSON.stringify([ses.id,ses.status,ses.current_index,ses.scheduled_start_at,ses.ends_at,st.submitted,st.makeup,st.attempt_started_at,Object.keys(st.my_answers||{}).length,S.res?.ready]);
   if(sig===S.sig&&document.getElementById('quizOverlay'))return;S.sig=sig;
   if(ses.status==='finished'&&st.submitted)return sResult();
   if(ses.status==='paused')return overlay(`<div class="panel center" style="margin-top:16vh"><div class="big">⏸️</div><h2>${esc(ses.title)}</h2><p>ครูพัก Quiz ชั่วคราว กรุณารอสักครู่</p></div>`);
+  // กำหนดเวลาแล้วให้ทุกคนเห็นตัวนับทันที และเปิดหน้าทำข้อสอบอัตโนมัติเมื่อถึงเวลา
+  if(ses.status==='scheduled'){S.entered.add(ses.id);return overlay(`<div class="panel center"><div class="big">🗓️</div><h2>${esc(ses.title)}</h2><p>กำหนดเริ่ม Quiz อัตโนมัติ</p><div id="quizScheduleClock" data-quiz-end="${new Date(ses.scheduled_start_at||0).getTime()}" style="font-size:30px;font-weight:800;margin:12px 0">--:--</div><p class="tiny muted">เมื่อถึงเวลาที่กำหนด ระบบจะเปิดข้อสอบและเริ่มจับเวลาพร้อมกันทุกคน</p></div>`)}
   if((ses.status==='lobby'||ses.status==='live')&&!st.makeup&&!st.submitted&&!S.entered.has(ses.id))return popup(ses);
   if(ses.status==='lobby')return overlay(`<div class="panel center"><div class="big">🧠</div><h2>${esc(ses.title)}</h2><p>รอครูกดเริ่ม Quiz… เตรียมตัวให้พร้อมนะ!</p></div>`);
-  if(st.submitted)return overlay(`<div class="panel center"><div class="big">✅</div><h2>ส่งคำตอบแล้ว</h2><p>รอเพื่อน ๆ ทำเสร็จ แล้วจะเฉลยและแสดงอันดับ</p></div>`);
+  if(st.submitted)return overlay(`<div class="panel center"><div class="big">✅</div><h2>ส่งคำตอบแล้ว</h2><p>ส่งคำตอบเรียบร้อยแล้ว</p><div id="quizWaitClock" data-quiz-end="${new Date(ses.ends_at||0).getTime()}" style="font-size:32px;font-weight:800;margin:12px 0">--:--</div><p class="tiny muted">เวลาที่เหลือก่อนหมดเวลา Quiz<br>เมื่อหมดเวลา หรือครูกดจบ จะเฉลยพร้อมกันทุกคน</p></div>`);
   const host=ses.mode==='host_paced'&&!st.makeup,rnd=seeded(studentToken+ses.id);
   let qs=[...st.questions];if(ses.shuffle&&!host)qs=shuf(qs,rnd);
   const body=qs.map((q,n)=>{let ch=q.choices.map((c,k)=>[c,k]);if(ses.shuffle)ch=shuf(ch,seeded(studentToken+ses.id+q.index));const mine=st.my_answers?.[q.index];
-    return `<div class="panel" style="margin:10px 0"><b>${host?'':(n+1)+'. '}${esc(q.body)}</b>${ch.map(([c,k])=>`<button class="btn ${mine===k||mine==String(k)?'primary':'white'}" style="display:block;width:100%;margin:6px 0;text-align:left" onclick="quizAnswer('${ses.id}',${q.index},${k})">${esc(c)}</button>`).join('')}</div>`}).join('');
+    return `<div class="panel" style="margin:10px 0"><b>${host?'':(n+1)+'. '}${esc(q.body)}</b>${ch.map(([c,k])=>`<button class="btn ${mine===k||mine==String(k)?'primary':'white'}" data-quiz-question="${q.index}" data-quiz-choice="${k}" style="display:block;width:100%;margin:6px 0;text-align:left" onclick="quizAnswer('${ses.id}',${q.index},${k})">${esc(c)}</button>`).join('')}</div>`}).join('');
   overlay(`<div class="panel center"><h3>${esc(ses.title)}</h3><div style="font-size:28px;font-weight:800" id="quizClock">--</div>${host?`<div class="tiny muted">ข้อที่ ${ses.current_index+1} / ${ses.question_count}</div>`:''}</div>${body}${host?'<p class="tiny muted center">ตอบได้ครั้งเดียวต่อข้อ รอครูไปข้อถัดไป</p>':`<button class="btn primary" style="width:100%" onclick="quizSubmit('${ses.id}')">ส่งคำตอบ</button>`}`);
 }
+function quizReminder(key,message){
+  if(S.warned.has(key))return;S.warned.add(key);
+  try{if(typeof toast==='function')toast(message)}catch(e){}
+}
+function quizThresholdWarnings(kind,id,left){
+  if(left<=300&&left>0)quizReminder(`${kind}:${id}:300`,kind==='start'?'Quiz จะเริ่มใน 5 นาที':'เหลือเวลาทำ Quiz อีก 5 นาที');
+  if(left<=60&&left>0)quizReminder(`${kind}:${id}:60`,kind==='start'?'Quiz จะเริ่มใน 1 นาที':'เหลือเวลาทำ Quiz อีก 1 นาที');
+}
 function sClock(){
-  const st=S.st,ses=st?.session,el=document.getElementById('quizClock');if(!ses||!el||ses.status!=='live'&&!st.makeup)return;
+  const st=S.st,ses=st?.session;if(!ses)return;
+  const scheduleEl=document.getElementById('quizScheduleClock');
+  if(scheduleEl){const left=Math.max(0,Math.ceil((new Date(ses.scheduled_start_at||0).getTime()-now())/1000));scheduleEl.textContent=`${Math.floor(left/60)}:${String(left%60).padStart(2,'0')}`;quizThresholdWarnings('start',ses.id,left);if(left===0)sGet();return}
+  const waitEl=document.getElementById('quizWaitClock');
+  if(waitEl){const left=Math.max(0,Math.ceil((new Date(ses.ends_at||0).getTime()-now())/1000));waitEl.textContent=`${Math.floor(left/60)}:${String(left%60).padStart(2,'0')}`;quizThresholdWarnings('end',ses.id,left);if(left===0)sGet();return}
+  const el=document.getElementById('quizClock');if(!el||ses.status!=='live'&&!st.makeup)return;
   let end;if(st.makeup)end=new Date(st.attempt_started_at).getTime()+ses.time_limit_seconds*1000;else if(ses.mode==='host_paced')end=new Date(ses.question_started_at).getTime()+ses.per_question_seconds*1000;else end=new Date(ses.ends_at).getTime();
   const left=Math.max(0,Math.ceil((end-now())/1000));el.textContent=`${Math.floor(left/60)}:${String(left%60).padStart(2,'0')}`;
+  if(!st.makeup)quizThresholdWarnings('end',ses.id,left);
   if(!left&&!st.submitted&&ses.mode==='self_paced'&&!S.auto){S.auto=ses.id;quizSubmit(ses.id,true)}
 }
 function sResult(){
-  const r=S.res,ses=S.st.session;if(!r||!r.ready)return overlay(`<div class="panel center"><div class="big">⏳</div><h2>ส่งคำตอบแล้ว</h2><p>รอครูจบรอบเพื่อเฉลย</p></div>`);
+  const r=S.res,ses=S.st.session;if(!r||!r.ready)return overlay(`<div class="panel center"><div class="big">⏳</div><h2>ส่งคำตอบแล้ว</h2><p>รอหมดเวลาหรือครูจบ Quiz เพื่อดูเฉลยและอันดับ</p></div>`);
   const medals=['🥇','🥈','🥉'];
   overlay(`<div class="panel center"><div class="big">${r.makeup?'⏪':'🏆'}</div><h2>${esc(r.title)}</h2><h1>${r.score}/${r.max}</h1><p>ได้ ⭐ ${r.stars} ดาว • ${r.makeup?'ถ้าทำในรอบสดจะได้อันดับประมาณ':'อันดับของคุณ'} ${r.my_rank??'-'}</p></div><div class="panel"><h3>🏆 อันดับ</h3>${(r.ranking||[]).map(x=>`<div class="listrow" style="${x.me?'background:#fff3c4':''}"><div class="row"><b class="rank">${medals[x.rank-1]||x.rank}</b><span>${esc(x.icon||'')} ${esc(x.name)}</span></div><b>${x.score}/${x.max}</b></div>`).join('')}</div><div class="panel"><h3>✅ เฉลย</h3>${(r.review||[]).map((q,i)=>`<div style="margin:10px 0"><b>${i+1}. ${esc(q.body)}</b>${q.choices.map((c,k)=>`<div style="padding:5px 8px;border-radius:8px;margin:3px 0;background:${k===q.correct_index?'#d9f5df':k===q.my_answer?'#ffdede':'transparent'}">${k===q.correct_index?'✅':k===q.my_answer?'❌':'▫️'} ${esc(c)}${k===q.my_answer?' ← คำตอบของคุณ':''}</div>`).join('')}${q.my_answer==null?'<div class="tiny muted">ไม่ได้ตอบข้อนี้</div>':''}</div>`).join('')}</div><button class="btn primary" style="width:100%" onclick="quizDismiss('${ses.id}')">ปิด</button>`);
 }
 window.quizDismiss=id=>{S.dismissed=id;hideOverlay();const s=S.st?.session;if(s&&s.status!=='finished')fab(true,id)};
-window.quizAnswer=async(sid,q,k)=>{try{const r=await supa.rpc('student_answer',{p_token:studentToken,p_session:sid,p_q:q,p_choice:k});if(r.error)throw r.error;S.st.my_answers={...(S.st.my_answers||{}),[q]:k};S.sig='';sRender()}catch(e){toast(e.message||String(e))}};
+window.quizAnswer=async(sid,q,k)=>{
+  const key=`${sid}:${q}`;if(S.answerBusy.has(key)||S.st?.submitted)return;S.answerBusy.add(key);
+  const buttons=[...document.querySelectorAll(`[data-quiz-question="${q}"]`)];buttons.forEach(b=>b.disabled=true);
+  try{
+    const r=await supa.rpc('student_answer',{p_token:studentToken,p_session:sid,p_q:q,p_choice:k});if(r.error)throw r.error;
+    S.st.my_answers={...(S.st.my_answers||{}),[q]:k};
+    // อัปเดตเฉพาะสีของตัวเลือก ไม่สร้างหน้าจอใหม่ จึงไม่ทำให้นาฬิกากระพริบ/รีเซ็ต
+    buttons.forEach(b=>{const selected=Number(b.dataset.quizChoice)===Number(k);b.classList.toggle('primary',selected);b.classList.toggle('white',!selected);b.disabled=false});
+  }catch(e){buttons.forEach(b=>b.disabled=false);toast(e.message||String(e))}
+  finally{S.answerBusy.delete(key)}
+};
 window.quizSubmit=async(sid,auto)=>{try{const r=await supa.rpc('student_submit_quiz',{p_token:studentToken,p_session:sid});if(r.error)throw r.error;S.st.submitted=true;S.sig='';sRender();sGet()}catch(e){if(!auto)toast(e.message||String(e))}};
 function sStart(){
   if(S.timer)return;
