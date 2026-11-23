@@ -153,6 +153,12 @@ if(isTeacherPage()){const _tc=teacherContent;window.teacherContent=teacherConten
 /* ================= ฝั่งนักเรียน ================= */
 const S={entered:new Set(),errShown:false,st:null,off:0,dismissed:null,res:null,timer:null,poll:null,busy:false,tick:null,sig:'',warned:new Set(),answerBusy:new Set()};
 const now=()=>Date.now()+S.off;
+const quizDismissKey=id=>`starup-quiz-dismissed:${id}`;
+/* จำการปิดไว้ก่อน "ตามสถานะ" ของรอบนั้น: เมื่อเปลี่ยนจากรอเวลา -> เริ่มทำได้ จะเด้งแจ้งเตือนใหม่เสมอ */
+function quizWasDismissed(id){try{return localStorage.getItem(quizDismissKey(id))===(S.st?.session?.status||'')}catch(e){return S.dismissed===id}}
+function quizRememberDismissed(id){S.dismissed=id;try{localStorage.setItem(quizDismissKey(id),S.st?.session?.status||'')}catch(e){}}
+const fmtLeft=s=>s>=86400?`${Math.floor(s/86400)} วัน ${Math.floor(s%86400/3600)} ชม.`:s>=3600?`${Math.floor(s/3600)}:${String(Math.floor(s%3600/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`:`${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
+const fmtDT=d=>new Date(d).toLocaleString('th-TH',{dateStyle:'medium',timeStyle:'short'});
 function seeded(seed){let h=1779033703^seed.length;for(let i=0;i<seed.length;i++){h=Math.imul(h^seed.charCodeAt(i),3432918353);h=h<<13|h>>>19}return()=>{h=Math.imul(h^h>>>16,2246822507);h=Math.imul(h^h>>>13,3266489909);h^=h>>>16;return(h>>>0)/4294967296}}
 function shuf(a,rnd){a=[...a];for(let i=a.length-1;i>0;i--){const j=Math.floor(rnd()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
 function overlay(html){let o=document.getElementById('quizOverlay');if(!o){o=document.createElement('div');o.id='quizOverlay';o.style.cssText='position:fixed;inset:0;z-index:80;background:#f7f3ff;overflow:auto;padding:14px;font-family:inherit';document.body.append(o)}o.innerHTML=`<div style="max-width:560px;margin:0 auto">${html}</div>`}
@@ -167,8 +173,11 @@ async function sGet(){
     const r=await supa.rpc('student_get_quiz_state',{p_token:studentToken});if(r.error)throw r.error;
     S.st=r.data;S.off=new Date(r.data.server_now).getTime()-Date.now();
     const ses=S.st.session;
+    const tabSig=JSON.stringify([ses?.id,ses?.status,S.st.submitted]);
+    if(S.tabSig!==tabSig){S.tabSig=tabSig;if(typeof studentTab!=='undefined'&&studentTab==='quiz'&&typeof renderStudent==='function')setTimeout(renderStudent,0)}
     if(!ses){hideOverlay();fab(false);return}
     if(quizWasDismissed(ses.id)){S.dismissed=ses.id;hideOverlay();if(ses.status!=='finished')fab(true,ses.id);else fab(false);return}
+    S.dismissed=null;
     if(ses.status==='finished'&&S.st.submitted){if(!S.res||S.res.sid!==ses.id||!S.res.ready){const x=await supa.rpc('student_get_quiz_result',{p_token:studentToken,p_session:ses.id});if(x.error)throw x.error;S.res={...x.data,sid:ses.id}}}
     sRender()
   }catch(e){console.warn('quiz state:',e);if(!S.errShown&&e&&e.message&&!/fetch|network/i.test(e.message)){S.errShown=true;toast('Quiz ใช้งานไม่ได้: '+e.message)}}
@@ -202,6 +211,7 @@ function quizThresholdWarnings(kind,id,left){
 }
 function sClock(){
   const st=S.st,ses=st?.session;if(!ses)return;
+  document.querySelectorAll('[data-quiz-tab-end]').forEach(el=>{const left=Math.max(0,Math.ceil((Number(el.dataset.quizTabEnd)-now())/1000));el.textContent=`${el.dataset.quizTabPrefix||''} ${fmtLeft(left)}`;if(left===0&&!el.dataset.fired){el.dataset.fired='1';sGet()}});
   const scheduleEl=document.getElementById('quizScheduleClock');
   if(scheduleEl){const left=Math.max(0,Math.ceil((new Date(ses.scheduled_start_at||0).getTime()-now())/1000));scheduleEl.textContent=`${Math.floor(left/60)}:${String(left%60).padStart(2,'0')}`;quizThresholdWarnings('start',ses.id,left);if(left===0)sGet();return}
   const waitEl=document.getElementById('quizWaitClock');
@@ -244,6 +254,18 @@ function sStart(){
   loop();
 }
 
+window.quizOpenFromTab=()=>{const s=S.st?.session;if(!s)return;try{localStorage.removeItem(quizDismissKey(s.id))}catch(e){}S.dismissed=null;S.entered.add(s.id);S.sig='';fab(false);sRender()};
+function quizActiveCard(){
+  const st=S.st,ses=st?.session;if(!ses||ses.status==='finished')return '';
+  const box=inner=>`<section class="panel" style="border:2px solid #7c5cff"><h3>🧠 Quiz ตอนนี้: ${esc(ses.title)}</h3>${inner}</section>`;
+  const clk=(ts,prefix)=>`<div data-quiz-tab-end="${ts}" data-quiz-tab-prefix="${prefix}" style="font-size:26px;font-weight:800;font-variant-numeric:tabular-nums;margin:6px 0">--:--</div>`;
+  const ends=new Date(ses.ends_at||0).getTime();
+  if(ses.status==='scheduled'){const t=new Date(ses.scheduled_start_at||0).getTime();return box(`<div class="tiny muted">🗓️ เริ่ม ${fmtDT(t)}</div>${clk(t,'เริ่มในอีก')}<button class="btn white" style="width:100%" disabled>▶ เริ่มทำ Quiz (รอถึงเวลา)</button><button class="btn white small" style="margin-top:6px" onclick="quizOpenFromTab()">ดูหน้าจอรอเริ่ม</button>`)}
+  if(ses.status==='paused')return box('<p>⏸ ครูพัก Quiz ชั่วคราว กรุณารอสักครู่</p>');
+  if(ses.status==='lobby')return box('<p>ครูเปิดห้อง Quiz แล้ว รอครูกดเริ่ม</p><button class="btn primary" style="width:100%" onclick="quizOpenFromTab()">เข้าห้อง Quiz</button>');
+  if(st.submitted)return box(`<p>✅ ส่งคำตอบแล้ว ผลคะแนนและเฉลยจะแสดงเมื่อหมดเวลา</p>${clk(ends,'หมดเวลาในอีก')}`);
+  return box(`<p>ถึงเวลาแล้ว! กดเริ่มทำได้เลย</p>${clk(ends,'เหลือเวลา')}<button class="btn primary" style="width:100%" onclick="quizOpenFromTab()">▶ เริ่มทำ Quiz</button>`)
+}
 /* ===== ประวัติ Quiz ของนักเรียน (เลือกวันที่ได้ / ยุบ-ขยายได้) ===== */
 const H={limit:8,from:'',to:'',list:null,loading:false,open:new Set(),rev:{},err:''};
 const dth=d=>new Date(d).toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'2-digit'});
@@ -266,7 +288,7 @@ function quizHistoryPage(){
     <div class="tiny muted">ผู้ทำ ${x.count} คน • คะแนนสูงสุด ${x.top??'-'}${x.avg!=null?' • เฉลี่ย '+x.avg:''}</div>
     ${x.participated?`<button class="btn white small" style="margin-top:6px" onclick="quizHReview('${x.id}')">${rv?'ซ่อนเฉลย':'ดูเฉลย'}</button>`:''}
     ${rv?`<div style="margin-top:8px">${(rv.review||[]).map((q,i)=>`<div style="margin:8px 0"><b>${i+1}. ${esc(q.body)}</b>${q.choices.map((c,k)=>`<div style="padding:4px 8px;border-radius:8px;margin:2px 0;background:${k===q.correct_index?'#d9f5df':k===q.my_answer?'#ffdede':'transparent'}">${k===q.correct_index?'✅':k===q.my_answer?'❌':'▫️'} ${esc(c)}${k===q.my_answer?' ← คำตอบของคุณ':''}</div>`).join('')}</div>`).join('')}</div>`:''}</details>`}).join('');
-  return `<section class="panel"><h3>📚 ประวัติ Quiz ของฉัน</h3><div class="row" style="gap:6px;flex-wrap:wrap;align-items:end"><label class="tiny">ตั้งแต่<br><input type="date" class="field" id="qhFrom" value="${H.from}" onchange="quizHFilter()"></label><label class="tiny">ถึง<br><input type="date" class="field" id="qhTo" value="${H.to}" onchange="quizHFilter()"></label></div><div class="row" style="gap:6px;margin-top:8px;flex-wrap:wrap"><button class="btn white small" onclick="quizHQuick(7)">7 วันล่าสุด</button><button class="btn white small" onclick="quizHQuick(30)">30 วันล่าสุด</button><button class="btn white small" onclick="quizHQuick(0)">ทั้งหมด</button></div></section>
+  return quizActiveCard()+`<section class="panel"><h3>📚 ประวัติ Quiz ของฉัน</h3><div class="row" style="gap:6px;flex-wrap:wrap;align-items:end"><label class="tiny">ตั้งแต่<br><input type="date" class="field" id="qhFrom" value="${H.from}" onchange="quizHFilter()"></label><label class="tiny">ถึง<br><input type="date" class="field" id="qhTo" value="${H.to}" onchange="quizHFilter()"></label></div><div class="row" style="gap:6px;margin-top:8px;flex-wrap:wrap"><button class="btn white small" onclick="quizHQuick(7)">7 วันล่าสุด</button><button class="btn white small" onclick="quizHQuick(30)">30 วันล่าสุด</button><button class="btn white small" onclick="quizHQuick(0)">ทั้งหมด</button></div></section>
   <section class="panel"><div class="row" style="gap:14px;flex-wrap:wrap"><div><b style="font-size:22px">${took.length}</b><div class="tiny muted">Quiz ที่ทำ</div></div><div><b style="font-size:22px">${avg}%</b><div class="tiny muted">คะแนนเฉลี่ยของฉัน</div></div><div><b style="font-size:22px">⭐${stars}</b><div class="tiny muted">ดาวจาก Quiz</div></div></div></section>
   <section class="panel"><div class="row" style="justify-content:space-between;gap:6px;flex-wrap:wrap"><h3>รายการ Quiz (${L.length})</h3><div><button class="btn white small" onclick="quizHAll(true)">ขยายทั้งหมด</button> <button class="btn white small" onclick="quizHAll(false)">ย่อทั้งหมด</button></div></div>${H.loading&&!L.length?'<p class="muted">กำลังโหลด…</p>':H.err?`<p class="muted">โหลดไม่สำเร็จ: ${esc(H.err)}</p>`:(cards?cards+(L.length>H.limit?`<button class="btn soft" style="width:100%;margin-top:8px" onclick="quizHMore()">แสดงเพิ่ม (${L.length-H.limit})</button>`:''):'<p class="muted">ไม่พบ Quiz ในช่วงวันที่นี้</p>')}</section>`;
 }
