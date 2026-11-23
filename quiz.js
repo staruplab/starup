@@ -154,7 +154,7 @@ async function sGet(){
     S.st=r.data;S.off=new Date(r.data.server_now).getTime()-Date.now();
     const ses=S.st.session;
     if(!ses){hideOverlay();fab(false);return}
-    if(S.dismissed===ses.id){hideOverlay();fab(ses.status!=='finished',ses.id);return}
+    if(S.dismissed===ses.id&&ses.status!=='finished'){hideOverlay();fab(true,ses.id);return}if(ses.status==='finished'&&S.dismissed===ses.id)S.dismissed=null;
     if(ses.status==='finished'&&S.st.submitted){if(!S.res||S.res.sid!==ses.id||!S.res.ready){const x=await supa.rpc('student_get_quiz_result',{p_token:studentToken,p_session:ses.id});if(x.error)throw x.error;S.res={...x.data,sid:ses.id}}}
     sRender()
   }catch(e){console.warn('quiz state:',e);if(!S.errShown&&e&&e.message&&!/fetch|network/i.test(e.message)){S.errShown=true;toast('Quiz ใช้งานไม่ได้: '+e.message)}}
@@ -170,12 +170,13 @@ function sRender(){
   if(ses.status==='scheduled'){S.entered.add(ses.id);return overlay(`<div class="panel center"><div class="big">🗓️</div><h2>${esc(ses.title)}</h2><p>กำหนดเริ่ม Quiz อัตโนมัติ</p><div id="quizScheduleClock" data-quiz-end="${new Date(ses.scheduled_start_at||0).getTime()}" style="font-size:30px;font-weight:800;margin:12px 0">--:--</div><p class="tiny muted">เมื่อถึงเวลาที่กำหนด ระบบจะเปิดข้อสอบและเริ่มจับเวลาพร้อมกันทุกคน</p></div>`)}
   if((ses.status==='lobby'||ses.status==='live')&&!st.makeup&&!st.submitted&&!S.entered.has(ses.id))return popup(ses);
   if(ses.status==='lobby')return overlay(`<div class="panel center"><div class="big">🧠</div><h2>${esc(ses.title)}</h2><p>รอครูกดเริ่ม Quiz… เตรียมตัวให้พร้อมนะ!</p></div>`);
-  if(st.submitted)return overlay(`<div class="panel center"><div class="big">✅</div><h2>ส่งคำตอบแล้ว</h2><p>ส่งคำตอบเรียบร้อยแล้ว</p><div id="quizWaitClock" data-quiz-end="${new Date(ses.ends_at||0).getTime()}" style="font-size:32px;font-weight:800;margin:12px 0">--:--</div><p class="tiny muted">เวลาที่เหลือก่อนหมดเวลา Quiz<br>เมื่อหมดเวลา หรือครูกดจบ จะเฉลยพร้อมกันทุกคน</p></div>`);
+  if(st.submitted)return overlay(`<div class="panel center"><div class="big">✅</div><h2>ส่งคำตอบแล้ว</h2><p>ระบบบันทึกคำตอบของคุณเรียบร้อยแล้ว</p><div id="quizWaitClock" data-quiz-end="${new Date(ses.ends_at||0).getTime()}" style="font-size:36px;font-weight:900;font-variant-numeric:tabular-nums;margin:12px 0">--:--</div><p class="tiny muted">เวลาที่เหลือก่อนหมดเวลา Quiz<br>เมื่อหมดเวลา หรือครูกดจบ จะเฉลยพร้อมกันทุกคน</p><button class="btn white" style="width:100%;margin-top:12px" onclick="quizDismiss('${ses.id}')">ปิดหน้าต่าง (ยังรอผลคะแนนได้)</button></div>`);
   const host=ses.mode==='host_paced'&&!st.makeup,rnd=seeded(studentToken+ses.id);
   let qs=[...st.questions];if(ses.shuffle&&!host)qs=shuf(qs,rnd);
+  const answered=Object.keys(st.my_answers||{}).length,total=ses.question_count||qs.length;
   const body=qs.map((q,n)=>{let ch=q.choices.map((c,k)=>[c,k]);if(ses.shuffle)ch=shuf(ch,seeded(studentToken+ses.id+q.index));const mine=st.my_answers?.[q.index];
     return `<div class="panel" style="margin:10px 0"><b>${host?'':(n+1)+'. '}${esc(q.body)}</b>${ch.map(([c,k])=>`<button class="btn ${mine===k||mine==String(k)?'primary':'white'}" data-quiz-question="${q.index}" data-quiz-choice="${k}" style="display:block;width:100%;margin:6px 0;text-align:left" onclick="quizAnswer('${ses.id}',${q.index},${k})">${esc(c)}</button>`).join('')}</div>`}).join('');
-  overlay(`<div class="panel center"><h3>${esc(ses.title)}</h3><div style="font-size:28px;font-weight:800" id="quizClock">--</div>${host?`<div class="tiny muted">ข้อที่ ${ses.current_index+1} / ${ses.question_count}</div>`:''}</div>${body}${host?'<p class="tiny muted center">ตอบได้ครั้งเดียวต่อข้อ รอครูไปข้อถัดไป</p>':`<button class="btn primary" style="width:100%" onclick="quizSubmit('${ses.id}')">ส่งคำตอบ</button>`}`);
+  overlay(`<div class="panel center"><h3>${esc(ses.title)}</h3><div style="font-size:30px;font-weight:800;font-variant-numeric:tabular-nums" id="quizClock">--:--</div><div class="tiny muted" id="quizProgressCount">ตอบแล้ว ${answered}/${total} ข้อ</div><div style="height:7px;background:#e9e7ef;border-radius:9px;overflow:hidden;margin:8px 0"><div id="quizProgressBar" style="height:7px;width:${total?Math.round(answered/total*100):0}%;background:#16a34a;border-radius:9px"></div></div><div class="tiny" id="quizSaveStatus" style="color:#16834a">✓ คำตอบที่เลือกจะบันทึกอัตโนมัติ</div>${host?`<div class="tiny muted">ข้อที่ ${ses.current_index+1} / ${ses.question_count}</div>`:''}</div>${body}${host?'<p class="tiny muted center">ตอบได้ครั้งเดียวต่อข้อ รอครูไปข้อถัดไป</p>':`<button class="btn primary" style="width:100%" onclick="quizSubmit('${ses.id}')">ส่งคำตอบ</button>`}`);
 }
 function quizReminder(key,message){
   if(S.warned.has(key))return;S.warned.add(key);
@@ -198,9 +199,9 @@ function sClock(){
   if(!left&&!st.submitted&&ses.mode==='self_paced'&&!S.auto){S.auto=ses.id;quizSubmit(ses.id,true)}
 }
 function sResult(){
-  const r=S.res,ses=S.st.session;if(!r||!r.ready)return overlay(`<div class="panel center"><div class="big">⏳</div><h2>ส่งคำตอบแล้ว</h2><p>รอหมดเวลาหรือครูจบ Quiz เพื่อดูเฉลยและอันดับ</p></div>`);
+  const r=S.res,ses=S.st.session;if(!r||!r.ready)return overlay(`<div class="panel center"><div class="big">⏳</div><h2>ส่งคำตอบแล้ว</h2><p>รอหมดเวลาหรือครูจบ Quiz เพื่อดูเฉลยและอันดับ</p><button class="btn white" style="width:100%" onclick="quizDismiss('${ses.id}')">ปิดหน้าต่าง</button></div>`);
   const medals=['🥇','🥈','🥉'];
-  overlay(`<div class="panel center"><div class="big">${r.makeup?'⏪':'🏆'}</div><h2>${esc(r.title)}</h2><h1>${r.score}/${r.max}</h1><p>ได้ ⭐ ${r.stars} ดาว • ${r.makeup?'ถ้าทำในรอบสดจะได้อันดับประมาณ':'อันดับของคุณ'} ${r.my_rank??'-'}</p></div><div class="panel"><h3>🏆 อันดับ</h3>${(r.ranking||[]).map(x=>`<div class="listrow" style="${x.me?'background:#fff3c4':''}"><div class="row"><b class="rank">${medals[x.rank-1]||x.rank}</b><span>${esc(x.icon||'')} ${esc(x.name)}</span></div><b>${x.score}/${x.max}</b></div>`).join('')}</div><div class="panel"><h3>✅ เฉลย</h3>${(r.review||[]).map((q,i)=>`<div style="margin:10px 0"><b>${i+1}. ${esc(q.body)}</b>${q.choices.map((c,k)=>`<div style="padding:5px 8px;border-radius:8px;margin:3px 0;background:${k===q.correct_index?'#d9f5df':k===q.my_answer?'#ffdede':'transparent'}">${k===q.correct_index?'✅':k===q.my_answer?'❌':'▫️'} ${esc(c)}${k===q.my_answer?' ← คำตอบของคุณ':''}</div>`).join('')}${q.my_answer==null?'<div class="tiny muted">ไม่ได้ตอบข้อนี้</div>':''}</div>`).join('')}</div><button class="btn primary" style="width:100%" onclick="quizDismiss('${ses.id}')">ปิด</button>`);
+  overlay(`<div role="dialog" aria-modal="true" aria-label="ผลคะแนน Quiz" style="max-width:560px;margin:10px auto;background:#f7f3ff;border-radius:18px;padding:10px;box-shadow:0 12px 40px rgba(0,0,0,.22)"><div class="row" style="justify-content:flex-end"><button class="btn white small" aria-label="ปิดหน้าต่างผลคะแนน" onclick="quizDismiss('${ses.id}')">✕ ปิด</button></div><div class="panel center"><div class="big">${r.makeup?'⏪':'🏆'}</div><span class="badge">Quiz สิ้นสุดแล้ว</span><h2>${esc(r.title)}</h2><div style="font-size:42px;font-weight:900;font-variant-numeric:tabular-nums">${r.score}/${r.max}</div><p style="font-size:18px;font-weight:700">ได้รับ ⭐ ${r.stars} ดาว</p><p>${r.makeup?'ถ้าทำในรอบสดจะได้อันดับประมาณ':'อันดับของคุณ'} ${r.my_rank??'-'}</p></div><div class="panel"><h3>🏆 ตารางคะแนน</h3>${(r.ranking||[]).map(x=>`<div class="listrow" style="${x.me?'background:#fff3c4':''}"><div class="row"><b class="rank">${medals[x.rank-1]||x.rank}</b><span>${esc(x.icon||'')} ${esc(x.name)}</span></div><b>${x.score}/${x.max}</b></div>`).join('')}</div><div class="panel"><h3>✅ เฉลย</h3>${(r.review||[]).map((q,i)=>`<div style="margin:10px 0"><b>${i+1}. ${esc(q.body)}</b>${q.choices.map((c,k)=>`<div style="padding:5px 8px;border-radius:8px;margin:3px 0;background:${k===q.correct_index?'#d9f5df':k===q.my_answer?'#ffdede':'transparent'}">${k===q.correct_index?'✅':k===q.my_answer?'❌':'▫️'} ${esc(c)}${k===q.my_answer?' ← คำตอบของคุณ':''}</div>`).join('')}${q.my_answer==null?'<div class="tiny muted">ไม่ได้ตอบข้อนี้</div>':''}</div>`).join('')}</div><button class="btn primary" style="width:100%;position:sticky;bottom:8px" onclick="quizDismiss('${ses.id}')">ปิดหน้าต่างผลคะแนน</button></div>`);
 }
 window.quizDismiss=id=>{S.dismissed=id;hideOverlay();const s=S.st?.session;if(s&&s.status!=='finished')fab(true,id)};
 window.quizAnswer=async(sid,q,k)=>{
@@ -209,8 +210,13 @@ window.quizAnswer=async(sid,q,k)=>{
   try{
     const r=await supa.rpc('student_answer',{p_token:studentToken,p_session:sid,p_q:q,p_choice:k});if(r.error)throw r.error;
     S.st.my_answers={...(S.st.my_answers||{}),[q]:k};
-    // อัปเดตเฉพาะสีของตัวเลือก ไม่สร้างหน้าจอใหม่ จึงไม่ทำให้นาฬิกากระพริบ/รีเซ็ต
+    // อัปเดตเฉพาะสี/สถานะ/ความคืบหน้า ไม่สร้างหน้าจอใหม่ จึงไม่ทำให้นาฬิกากระพริบ
     buttons.forEach(b=>{const selected=Number(b.dataset.quizChoice)===Number(k);b.classList.toggle('primary',selected);b.classList.toggle('white',!selected);b.disabled=false});
+    const total=S.st.session?.question_count||0,answered=Object.keys(S.st.my_answers||{}).length;
+    const count=document.getElementById('quizProgressCount'),bar=document.getElementById('quizProgressBar'),status=document.getElementById('quizSaveStatus');
+    if(count)count.textContent=`ตอบแล้ว ${answered}/${total} ข้อ`;
+    if(bar)bar.style.width=`${total?Math.min(100,Math.round(answered/total*100)):0}%`;
+    if(status)status.textContent='✓ บันทึกคำตอบแล้ว';
   }catch(e){buttons.forEach(b=>b.disabled=false);toast(e.message||String(e))}
   finally{S.answerBusy.delete(key)}
 };
