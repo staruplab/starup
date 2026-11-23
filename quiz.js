@@ -21,7 +21,7 @@ async function quizLoad(){
     if(view==='quiz')renderTeacher();
   }catch(e){toast('โหลด Quiz ไม่สำเร็จ (ต้องรัน migration_quiz_system.sql ก่อน): '+(e.message||e))}
 }
-function quizTick(){clearInterval(Q.timer);clearInterval(Q.clock);Q.timer=setInterval(()=>{if(view!=='quiz'||document.hidden||document.getElementById('modalback')?.classList.contains('show'))return;quizLoad()},7000);Q.clock=setInterval(()=>{document.querySelectorAll('[data-quiz-end]').forEach(el=>{const left=Math.max(0,Math.ceil((Number(el.dataset.quizEnd)-Date.now())/1000));el.textContent=`${el.dataset.quizPrefix||'เวลาเหลือ'} ${Math.floor(left/60)}:${String(left%60).padStart(2,'0')}`;if(left===0)quizLoad()})},1000)}
+function quizTick(){clearInterval(Q.timer);clearInterval(Q.clock);Q.timer=setInterval(()=>{if(view!=='quiz'||document.hidden||document.getElementById('modalback')?.classList.contains('show'))return;quizLoad()},7000);Q.clock=setInterval(()=>{document.querySelectorAll('[data-quiz-end]').forEach(el=>{const left=Math.max(0,Math.ceil((Number(el.dataset.quizEnd)-Date.now())/1000));el.textContent=`${el.dataset.quizPrefix||'เวลาเหลือ'} ${el.dataset.quizPrefix==='เริ่มใน'?fmtLeft(left):Math.floor(left/60)+':'+String(left%60).padStart(2,'0')}`;if(left===0)quizLoad()})},1000)}
 Q.histOpen=false;Q.histLimit=5;
 const chip=(t,bg,fg)=>`<span class="badge" style="background:${bg};color:${fg}">${t}</span>`;
 window.quizHistToggle=()=>{Q.histOpen=!Q.histOpen;renderTeacher(isDemo())};
@@ -155,16 +155,41 @@ const S={entered:new Set(),errShown:false,st:null,off:0,dismissed:null,res:null,
 const now=()=>Date.now()+S.off;
 const quizDismissKey=id=>`starup-quiz-dismissed:${id}`;
 /* จำการปิดไว้ก่อน "ตามสถานะ" ของรอบนั้น: เมื่อเปลี่ยนจากรอเวลา -> เริ่มทำได้ จะเด้งแจ้งเตือนใหม่เสมอ */
-function quizWasDismissed(id){try{return localStorage.getItem(quizDismissKey(id))===(S.st?.session?.status||'')}catch(e){return S.dismissed===id}}
-function quizRememberDismissed(id){S.dismissed=id;try{localStorage.setItem(quizDismissKey(id),S.st?.session?.status||'')}catch(e){}}
-const fmtLeft=s=>s>=86400?`${Math.floor(s/86400)} วัน ${Math.floor(s%86400/3600)} ชม.`:s>=3600?`${Math.floor(s/3600)}:${String(Math.floor(s%3600/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`:`${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
+function quizStage(ses){if(!ses)return '';if(ses.status!=='scheduled')return ses.status;const left=Math.ceil((new Date(ses.scheduled_start_at||0).getTime()-now())/1000);return 'scheduled:'+(left<=300?'5':left<=1800?'30':'far')}
+function quizWasDismissed(id){try{return localStorage.getItem(quizDismissKey(id))===quizStage(S.st?.session)}catch(e){return S.dismissed===id}}
+function quizRememberDismissed(id){S.dismissed=id;try{localStorage.setItem(quizDismissKey(id),quizStage(S.st?.session))}catch(e){}}
+const fmtLeft=s=>{s=Math.max(0,s);const d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60),ss=s%60;return d?`${d} วัน ${h} ชม. ${m} นาที`:h?`${h} ชม. ${m} นาที`:`${m} นาที ${String(ss).padStart(2,'0')} วินาที`};
 const fmtDT=d=>new Date(d).toLocaleString('th-TH',{dateStyle:'medium',timeStyle:'short'});
 function seeded(seed){let h=1779033703^seed.length;for(let i=0;i<seed.length;i++){h=Math.imul(h^seed.charCodeAt(i),3432918353);h=h<<13|h>>>19}return()=>{h=Math.imul(h^h>>>16,2246822507);h=Math.imul(h^h>>>13,3266489909);h^=h>>>16;return(h>>>0)/4294967296}}
 function shuf(a,rnd){a=[...a];for(let i=a.length-1;i>0;i--){const j=Math.floor(rnd()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
-function overlay(html){let o=document.getElementById('quizOverlay');if(!o){o=document.createElement('div');o.id='quizOverlay';o.style.cssText='position:fixed;inset:0;z-index:80;background:#f7f3ff;overflow:auto;padding:14px;font-family:inherit';document.body.append(o)}o.innerHTML=`<div style="max-width:560px;margin:0 auto">${html}</div>`}
-function hideOverlay(){document.getElementById('quizOverlay')?.remove()}
-function fab(on,id){let b=document.getElementById('quizFab');if(!on){b?.remove();return}if(b)return;b=document.createElement('button');b.id='quizFab';b.className='btn primary';b.style.cssText='position:fixed;right:14px;bottom:70px;z-index:79;box-shadow:0 4px 14px rgba(0,0,0,.25)';b.textContent='🧠 เข้าทำ Quiz';b.onclick=()=>{try{localStorage.removeItem(quizDismissKey(id))}catch(e){}S.dismissed=null;S.entered.add(id);S.sig='';fab(false);sRender()};document.body.append(b)}
-function popup(ses){try{typeof playUrgentSound==='function'&&playUrgentSound()}catch(e){}overlay(`<div class="panel center" style="margin-top:18vh"><div class="big">🧠📢</div><span class="badge">Quiz ใหม่!</span><h2>${esc(ses.title)}</h2><p>ครูเปิด Quiz แล้ว กดเข้าไปทำได้เลย</p><button class="btn primary" style="width:100%;margin-top:10px" onclick="quizEnter('${ses.id}')">เข้าทำ Quiz 🚀</button><button class="btn white small" style="margin-top:8px" onclick="quizDismiss('${ses.id}')">ไว้ก่อน</button></div>`)}
+/* ลำดับความสำคัญ (มาก = สำคัญกว่า): ทำ Quiz อยู่ 110 > Quiz เริ่มแล้วเข้าทีหลัง 100 > Quiz ใกล้เริ่ม ≤5 นาที 90 > ภารกิจด่วน 80 > Quiz เตรียมตัว ≤30 นาที 70 > หน้ารอเริ่ม 60 > ภารกิจสำเร็จ/ได้รางวัล 50 > ผลคะแนน/รอเฉลย 40 > ข่าวทั่วไป 30 */
+const noticePri=k=>k==='urgent_mission'?80:(k==='approved'||k==='reward_approved')?50:30;
+const noticeShownPri=()=>Number(document.getElementById('starupStudentNotice')?.dataset.pri||0);
+const quizPriNow=()=>Number(document.getElementById('quizOverlay')?.dataset.pri||0);
+const kickNotices=ms=>setTimeout(()=>{try{showNextStudentNotice()}catch(e){}},ms);
+function overlay(html,pri){
+  if(pri==null)pri=/quizWaitClock|aria-label="ผลคะแนน Quiz"|รอหมดเวลาหรือครูจบ/.test(html)?40:110;
+  let o=document.getElementById('quizOverlay');const old=o?Number(o.dataset.pri||0):0;
+  if(!o){o=document.createElement('div');o.id='quizOverlay';o.style.cssText='position:fixed;inset:0;z-index:80;background:#f7f3ff;overflow:auto;padding:14px;font-family:inherit';document.body.append(o)}
+  o.dataset.pri=String(pri);o.innerHTML=`<div style="max-width:560px;margin:0 auto">${html}</div>`;
+  const nb=document.getElementById('starupStudentNotice');
+  if(nb&&pri>Number(nb.dataset.pri||0)){try{clearInterval(studentNoticeCountdownTimer)}catch(e){}nb.remove()}   /* หน้าต่างแจ้งเตือนที่สำคัญน้อยกว่า ถูกพักไว้ในคิว แล้วค่อยเด้งใหม่ภายหลัง */
+  if(old&&pri<old)kickNotices(300);
+}
+function hideOverlay(){const had=document.getElementById('quizOverlay');had?.remove();if(had)kickNotices(250)}
+function fab(on,id){let b=document.getElementById('quizFab');if(!on){b?.remove();return}const lab=S.st?.session?.status==='scheduled'?'🧠 ดู Quiz ที่กำลังจะเริ่ม':'🧠 เข้าทำ Quiz';if(b){b.textContent=lab;return}b=document.createElement('button');b.id='quizFab';b.className='btn primary';b.style.cssText='position:fixed;right:14px;bottom:70px;z-index:79;box-shadow:0 4px 14px rgba(0,0,0,.25)';b.textContent=lab;b.onclick=()=>{try{localStorage.removeItem(quizDismissKey(id))}catch(e){}S.dismissed=null;S.entered.add(id);S.sig='';fab(false);sRender()};document.body.append(b)}
+function popup(ses){
+  try{typeof playUrgentSound==='function'&&playUrgentSound()}catch(e){}
+  const ends=ses.ends_at?new Date(ses.ends_at).getTime():0;
+  const left=ends?`<div style="margin:10px 0;padding:11px;border-radius:14px;background:#fff4d9;color:#8c5b0b"><div style="font-size:12px;font-weight:800">⏳ เวลาที่เหลือ</div><div data-quiz-tab-end="${ends}" data-quiz-tab-prefix="" style="font-size:24px;font-weight:900;font-variant-numeric:tabular-nums">--</div></div>`:'';
+  overlay(`<div class="panel center" style="margin-top:14vh"><div class="big">🧠📢</div><span class="badge">${ends?'Quiz เริ่มแล้ว!':'Quiz ใหม่!'}</span><h2>${esc(ses.title)}</h2><p>${ends?'Quiz กำลังดำเนินอยู่ รีบเข้าไปทำก่อนหมดเวลานะ':'ครูเปิด Quiz แล้ว กดเข้าไปทำได้เลย'}</p>${left}<button class="btn primary" style="width:100%;margin-top:10px" onclick="quizEnter('${ses.id}')">เข้าทำ Quiz 🚀</button><button class="btn white small" style="margin-top:8px" onclick="quizDismiss('${ses.id}')">ไว้ก่อน</button></div>`,100)
+}
+function preStartPopup(ses,stage){
+  const t=new Date(ses.scheduled_start_at||0).getTime(),soon=stage==='scheduled:5';
+  try{soon&&typeof playUrgentSound==='function'&&playUrgentSound()}catch(e){}
+  overlay(`<div class="panel center" style="margin-top:12vh"><div class="big">⏰🧠</div><span class="badge">${soon?'ใกล้ถึงเวลาแล้ว!':'เตรียมตัวทำ Quiz'}</span><h2>${esc(ses.title)}</h2><p>Quiz จะเริ่ม ${fmtDT(t)}</p><div data-quiz-tab-end="${t}" data-quiz-tab-prefix="เริ่มในอีก" style="font-size:24px;font-weight:900;margin:10px 0">--</div><div class="tiny muted" style="text-align:left;margin:6px 0 12px">✔ หาที่นั่งที่เงียบ ๆ<br>✔ เช็กอินเทอร์เน็ตและแบตเตอรี่<br>✔ เมื่อถึงเวลา กดเข้าทำ Quiz ได้ทันที</div><button class="btn primary" style="width:100%" onclick="quizGoTab('${ses.id}')">ไปที่หน้า Quiz เพื่อรอเวลา 🧠</button><button class="btn white small" style="margin-top:8px" onclick="quizDismiss('${ses.id}')">ไว้ก่อน</button></div>`,soon?90:70)
+}
+window.quizGoTab=id=>{quizRememberDismissed(id);hideOverlay();fab(false);try{studentTab='quiz';renderStudent();window.scrollTo(0,0)}catch(e){}};
 window.quizEnter=id=>{S.entered.add(id);S.sig='';fab(false);sRender()};
 async function sGet(){
   if(typeof studentToken==='undefined'||!studentToken||!(typeof supa!=='undefined'&&supa)||S.busy||(typeof previewMode!=='undefined'&&previewMode))return;
@@ -176,7 +201,7 @@ async function sGet(){
     const tabSig=JSON.stringify([ses?.id,ses?.status,S.st.submitted]);
     if(S.tabSig!==tabSig){S.tabSig=tabSig;dLoad();if(typeof studentTab!=='undefined'&&studentTab==='quiz'&&typeof renderStudent==='function')setTimeout(renderStudent,0)}
     if(!ses){hideOverlay();fab(false);return}
-    if(quizWasDismissed(ses.id)){S.dismissed=ses.id;hideOverlay();if(ses.status!=='finished')fab(true,ses.id);else fab(false);return}
+    if(quizWasDismissed(ses.id)){S.dismissed=ses.id;hideOverlay();if(ses.status!=='finished'&&!(ses.status==='scheduled'&&typeof studentTab!=='undefined'&&studentTab==='quiz'))fab(true,ses.id);else fab(false);return}
     S.dismissed=null;
     if(ses.status==='finished'&&S.st.submitted){if(!S.res||S.res.sid!==ses.id||!S.res.ready){const x=await supa.rpc('student_get_quiz_result',{p_token:studentToken,p_session:ses.id});if(x.error)throw x.error;S.res={...x.data,sid:ses.id}}}
     sRender()
@@ -185,12 +210,19 @@ async function sGet(){
 }
 function sRender(){
   const st=S.st,ses=st?.session;if(!ses)return;
-  const sig=JSON.stringify([ses.id,ses.status,ses.current_index,ses.scheduled_start_at,ses.ends_at,st.submitted,st.makeup,st.attempt_started_at,Object.keys(st.my_answers||{}).length,S.res?.ready]);
+  const sig=JSON.stringify([ses.id,ses.status,ses.current_index,ses.scheduled_start_at,ses.ends_at,st.submitted,st.makeup,st.attempt_started_at,Object.keys(st.my_answers||{}).length,S.res?.ready,quizStage(ses)]);
   if(sig===S.sig&&document.getElementById('quizOverlay'))return;S.sig=sig;
   if(ses.status==='finished'&&st.submitted)return sResult();
   if(ses.status==='paused')return overlay(`<div class="panel center" style="margin-top:16vh"><div class="big">⏸️</div><h2>${esc(ses.title)}</h2><p>ครูพัก Quiz ชั่วคราว กรุณารอสักครู่</p></div>`);
   // กำหนดเวลาแล้วให้ทุกคนเห็นตัวนับทันที และเปิดหน้าทำข้อสอบอัตโนมัติเมื่อถึงเวลา
-  if(ses.status==='scheduled'){return overlay(`<div class="panel center"><div class="big">🗓️</div><h2>${esc(ses.title)}</h2><p>กำหนดเริ่ม Quiz อัตโนมัติ</p><div id="quizScheduleClock" data-quiz-end="${new Date(ses.scheduled_start_at||0).getTime()}" style="font-size:30px;font-weight:800;margin:12px 0">--:--</div><p class="tiny muted">เมื่อถึงเวลา ระบบจะเปิดให้ทุกคนกดเข้าทำ Quiz ได้ทันที และเริ่มนับเวลาตามที่ครูกำหนด</p><button class="btn white" style="width:100%;margin-top:10px" onclick="quizDismiss('${ses.id}')">ปิดไว้ก่อน</button></div>`)}
+  if(ses.status==='scheduled'){
+    if(S.entered.has(ses.id))return overlay(`<div class="panel center"><div class="big">🗓️</div><h2>${esc(ses.title)}</h2><p>กำหนดเริ่ม Quiz อัตโนมัติ</p><div id="quizScheduleClock" data-quiz-end="${new Date(ses.scheduled_start_at||0).getTime()}" style="font-size:26px;font-weight:800;margin:12px 0">--</div><p class="tiny muted">เมื่อถึงเวลา ระบบจะเปิดให้ทุกคนกดเข้าทำ Quiz ได้ทันที และเริ่มนับเวลาตามที่ครูกำหนด</p><button class="btn white" style="width:100%;margin-top:10px" onclick="quizDismiss('${ses.id}')">ปิดไว้ก่อน</button></div>`,60);
+    const stg=quizStage(ses);
+    if(stg==='scheduled:far'){hideOverlay();return}   /* ยังอีกนาน: ดูได้ที่การ์ดในแท็บ Quiz ไม่เด้งรบกวน */
+    const want=stg==='scheduled:5'?90:70;
+    if(noticeShownPri()>=want)return;                  /* มีแจ้งเตือนที่สำคัญกว่าอยู่ ให้รอก่อน (รอบโพลถัดไปจะเด้งเอง) */
+    return preStartPopup(ses,stg)
+  }
   if((ses.status==='lobby'||ses.status==='live')&&!st.makeup&&!st.submitted&&!S.entered.has(ses.id))return popup(ses);
   if(ses.status==='lobby')return overlay(`<div class="panel center"><div class="big">🧠</div><h2>${esc(ses.title)}</h2><p>รอครูกดเริ่ม Quiz… เตรียมตัวให้พร้อมนะ!</p></div>`);
   if(st.submitted)return overlay(`<div class="panel center"><div class="big">✅</div><h2>ส่งคำตอบแล้ว</h2><p>ระบบบันทึกคำตอบของคุณเรียบร้อยแล้ว</p><div id="quizWaitClock" data-quiz-end="${new Date(ses.ends_at||0).getTime()}" style="font-size:36px;font-weight:900;font-variant-numeric:tabular-nums;margin:12px 0">--:--</div><p class="tiny muted">เวลาที่เหลือก่อนหมดเวลา Quiz<br>เมื่อหมดเวลา หรือครูกดจบ จะเฉลยพร้อมกันทุกคน</p><button class="btn white" style="width:100%;margin-top:12px" onclick="quizDismiss('${ses.id}')">ปิดหน้าต่าง (ยังรอผลคะแนนได้)</button></div>`);
@@ -206,6 +238,7 @@ function quizReminder(key,message){
   try{if(typeof toast==='function')toast(message)}catch(e){}
 }
 function quizThresholdWarnings(kind,id,left){
+  if(kind==='start')return;   /* ก่อนเริ่มใช้หน้าต่างเตือนแทน toast */
   if(left<=300&&left>0)quizReminder(`${kind}:${id}:300`,kind==='start'?'Quiz จะเริ่มใน 5 นาที':'เหลือเวลาทำ Quiz อีก 5 นาที');
   if(left<=60&&left>0)quizReminder(`${kind}:${id}:60`,kind==='start'?'Quiz จะเริ่มใน 1 นาที':'เหลือเวลาทำ Quiz อีก 1 นาที');
 }
@@ -214,7 +247,7 @@ function sClock(){
   document.querySelectorAll('[data-quiz-tab-end]').forEach(el=>{const left=Math.max(0,Math.ceil((Number(el.dataset.quizTabEnd)-now())/1000));el.textContent=`${el.dataset.quizTabPrefix||''} ${fmtLeft(left)}`;if(left===0&&!el.dataset.fired){el.dataset.fired='1';sGet();setTimeout(dLoad,1500)}});
   if(!ses)return;
   const scheduleEl=document.getElementById('quizScheduleClock');
-  if(scheduleEl){const left=Math.max(0,Math.ceil((new Date(ses.scheduled_start_at||0).getTime()-now())/1000));scheduleEl.textContent=`${Math.floor(left/60)}:${String(left%60).padStart(2,'0')}`;quizThresholdWarnings('start',ses.id,left);if(left===0)sGet();return}
+  if(scheduleEl){const left=Math.max(0,Math.ceil((new Date(ses.scheduled_start_at||0).getTime()-now())/1000));scheduleEl.textContent=`เริ่มในอีก ${fmtLeft(left)}`;quizThresholdWarnings('start',ses.id,left);if(left===0)sGet();return}
   const waitEl=document.getElementById('quizWaitClock');
   if(waitEl){const left=Math.max(0,Math.ceil((new Date(ses.ends_at||0).getTime()-now())/1000));waitEl.textContent=`${Math.floor(left/60)}:${String(left%60).padStart(2,'0')}`;quizThresholdWarnings('end',ses.id,left);if(left===0)sGet();return}
   const el=document.getElementById('quizClock');if(!el||ses.status!=='live'&&!st.makeup)return;
@@ -347,6 +380,12 @@ function quizDailySection(){
   return `<section class="panel" style="margin-bottom:14px"><div class="split"><div><h3>🔁 Quiz ประจำวัน</h3><div class="tiny muted">ทำได้วันละ 1 ครั้ง เริ่มใหม่ทุกวัน · อยู่ที่นี่จนกว่าครูจะปิด</div></div><span class="badge">${dTodo()} รอทำวันนี้</span></div><div class="grid cards">${L.map(card).join('')}</div></section>`;
 }
 if(typeof renderStudent==='function'){const _rs=renderStudent;window.renderStudent=renderStudent=function(){const r=_rs.apply(this,arguments);try{quizPaintBadge()}catch(e){}return r}}
+if(typeof showNextStudentNotice==='function'){const _sn=showNextStudentNotice;window.showNextStudentNotice=showNextStudentNotice=function(){
+  try{const q=(typeof studentNoticeQueue!=='undefined'&&studentNoticeQueue)||[];
+    if(q.length&&!document.getElementById('starupStudentNotice')){const top=Math.max(...q.map(n=>noticePri(n.kind)));if(quizPriNow()>top)return}}catch(e){}
+  const r=_sn.apply(this,arguments);
+  try{const b=document.getElementById('starupStudentNotice');if(b&&!b.dataset.pri){const n=(studentNoticeQueue||[]).find(x=>String(x.id)===String(b.dataset.notificationId));b.dataset.pri=String(noticePri(n&&n.kind))}}catch(e){}
+  return r}}
 if(typeof studentContent==='function'){const _sc=studentContent;window.studentContent=studentContent=function(){return typeof studentTab!=='undefined'&&studentTab==='quiz'?quizHistoryPage():_sc.apply(this,arguments)}}
 const wait=setInterval(()=>{if(typeof studentToken!=='undefined'&&studentToken&&!isTeacherPage()||(typeof studentToken!=='undefined'&&studentToken&&typeof logoutStudent==='function')){clearInterval(wait);sStart()}},800);
 })();
