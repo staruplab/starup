@@ -649,5 +649,5 @@ async function installStarUpApp(){
 if('serviceWorker' in navigator){ window.addEventListener('load',()=>{ const swUrl=new URL('./sw.js',location.href); const swScope=new URL('./',location.href).pathname; navigator.serviceWorker.register(swUrl.href,{scope:swScope,updateViaCache:'none'}).then(reg=>reg.update()).catch(err=>console.warn('PWA service worker registration failed:',err)); }); }
 window.addEventListener('load',starUpRefreshInstallButton);
 </script>
-<script src="quiz.js?v=8"></script>
+<script src="quiz.js?v=9"></script>
 </body></html>
