@@ -113,7 +113,8 @@ const getTabSeen=()=>{try{return new Set(JSON.parse(localStorage.getItem(sk()+':
 const markTabSeen=()=>{try{localStorage.setItem(sk()+':tab',JSON.stringify((S.list||[]).map(r=>r.id)))}catch(e){}};
 /* แถบ Quiz สีแดง: รอบที่ยังไม่ได้ทำ และ (เปิดอยู่ หรือเป็นรอบใหม่ที่ยังไม่เคยเปิดดูในแท็บ Quiz) */
 const badgeN=()=>{const n=sNow(),ts=getTabSeen();return (S.list||[]).filter(r=>{if(r.attempt&&r.attempt.submitted_at)return false;const o=ms(r.open_at),c=ms(r.close_at);return n<c&&(n>=o||!ts.has(r.id))}).length};
-function paintBadge(){const b=[...document.querySelectorAll('.student-tabs .tab')].find(x=>/studentTab='quiz'/.test(x.getAttribute('onclick')||''));if(!b)return;const n=badgeN();b.innerHTML='🧠 Quiz'+(n?`<span class="tab-alert" style="background:#e53935;color:#fff;border-radius:999px;padding:1px 7px;font-size:11px;font-weight:800;margin-left:4px">${n}</span>`:'')}
+window.quizTabBadge=()=>{try{const n=badgeN();return n?` <span class="tab-alert">${n}</span>`:''}catch(e){return ''}};
+function paintBadge(){const b=[...document.querySelectorAll('.student-tabs .tab')].find(x=>/studentTab='quiz'/.test(x.getAttribute('onclick')||''));if(b)b.innerHTML='🧠 Quiz'+quizTabBadge()}
 /* หน้าต่างแจ้งเตือน: Quiz ใหม่ / เปิดแล้ว / เหลือ 1 ชม. / เหลือ 10 นาที / ครูเตือน (จำว่าเคยเห็นแล้วในเครื่อง) */
 function qAlertCheck(){
   if(noStu()||!S.list||S.tk||document.hidden||document.getElementById('quizOverlay')||document.getElementById('starupStudentNotice')||document.getElementById('quizAlert'))return;
@@ -169,5 +170,5 @@ if(typeof showNextStudentNotice==='function'){const _sn=showNextStudentNotice;wi
 if(typeof renderStudent==='function'){const _rs=renderStudent;window.renderStudent=renderStudent=function(){const r=_rs.apply(this,arguments);try{paintBadge()}catch(e){}return r}}
 if(typeof studentContent==='function'){const _sc=studentContent;window.studentContent=studentContent=function(){return tabQuiz()?quizStudentPage():_sc.apply(this,arguments)}}
 function sStart(){rLoad();setInterval(()=>{if(!document.hidden)rLoad()},30000);setInterval(()=>{if(document.hidden||S.tk)return;cdTick(S.off,()=>rLoad());qAlertCheck()},15000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)rLoad()})}
-const wait=setInterval(()=>{if(typeof studentToken!=='undefined'&&studentToken&&!isTeacherPage()){clearInterval(wait);sStart()}},800);
+const wait=setInterval(()=>{if(typeof studentToken!=='undefined'&&studentToken){clearInterval(wait);sStart()}},800);
 })();
