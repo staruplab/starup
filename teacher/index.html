@@ -327,20 +327,45 @@ function openRewardLibrary(){
 function openLibraryForm(id=''){
  const r=rewardLibrary.find(x=>x.id===id);
  modal(`<h3>${r?'แก้ไขรายการในคลัง':'เพิ่มของรางวัลเข้าคลัง'} 📚</h3>
- <div class="fieldrow"><label>ชื่อของรางวัล</label><input class="field" id="libName" value="${esc(r?.name||'')}" placeholder="เช่น iPhone 18 Pro Max"></div>
- <div class="fieldrow"><label>รายละเอียด</label><input class="field" id="libDesc" value="${esc(r?.description||'')}" placeholder="รายละเอียดของรางวัล"></div>
- <div class="grid" style="grid-template-columns:1fr 1fr"><div class="fieldrow"><label>ไอคอน</label><input class="field" id="libEmoji" value="${esc(r?.emoji||'🎁')}" maxlength="5"></div><div class="fieldrow"><label>ราคา (ดาว)</label><input class="field" id="libCost" type="number" min="1" value="${r?.cost??1000}"></div></div>
- <div class="fieldrow"><label>จำนวนเริ่มต้นในแต่ละห้อง</label><input class="field" id="libStock" type="number" min="0" value="${r?.stock??1}"></div>
- <div class="modalfoot"><button class="btn white" onclick="openRewardLibrary()">ย้อนกลับ</button>${r?`<button class="btn red" onclick="deleteLibraryItem('${r.id}')">ลบ</button>`:''}<button class="btn primary" onclick="saveLibraryItem('${id}')">บันทึกในคลัง</button></div>`);
+ <div class="fieldrow"><label>ชื่อของรางวัล</label><input class="field" id="libName" value="${esc(r?.name||'')}" placeholder="เช่น ชุดเครื่องเขียน"></div>
+ <div class="fieldrow"><label>รายละเอียดของรางวัล</label><input class="field" id="libDesc" value="${esc(r?.description||'')}" placeholder="รายละเอียดของรางวัล"></div>
+ <div class="fieldrow"><label>📷 อัปโหลดรูปภาพจากเครื่อง (เลือกได้หลายรูป สูงสุด 8 รูป)</label><input class="field" id="libFiles" type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple onchange="previewLibraryUploads()"><div class="tiny muted" id="libUploadHint">รองรับ JPG, PNG, WEBP และ GIF ขนาดไม่เกิน 5 MB ต่อรูป</div><div id="libUploadPreview" class="tiny muted"></div></div>
+ <div class="fieldrow"><label>หรือลิงก์รูปภาพ (บรรทัดละ 1 ลิงก์)</label><textarea class="field" id="libImages" rows="3" placeholder="https://.../reward1.jpg&#10;https://.../reward2.jpg">${esc((r?.images||[]).join('\n'))}</textarea><div class="tiny muted">รวมรูปเดิม รูปที่อัปโหลด และลิงก์ได้ไม่เกิน 8 รูป หากไม่ใส่รูปจะแสดง Emoji แทน</div></div>
+ <div class="grid" style="grid-template-columns:1fr 1fr"><div class="fieldrow"><label>Emoji สำรอง</label><input class="field" id="libEmoji" value="${esc(r?.emoji||'🎁')}" maxlength="5"></div><div class="fieldrow"><label>จำนวนดาวที่ใช้แลก</label><input class="field" id="libCost" type="number" min="1" value="${r?.cost??50}"></div></div>
+ <div class="fieldrow"><label>จำนวนของรางวัลเริ่มต้นในแต่ละห้อง</label><input class="field" id="libStock" type="number" min="0" value="${r?.stock??5}"></div>
+ <div class="modalfoot"><button class="btn white" onclick="openRewardLibrary()">ย้อนกลับ</button>${r?`<button class="btn red" onclick="deleteLibraryItem('${r.id}')">ลบ</button>`:''}<button class="btn primary" id="saveLibraryBtn" onclick="saveLibraryItem('${id}')">บันทึกในคลัง</button></div>`);
+}
+function previewLibraryUploads(){
+ const el=$('#libFiles'),files=[...(el?.files||[])],box=$('#libUploadPreview');if(!box)return;
+ const valid=files.filter(f=>f.type.startsWith('image/')&&f.size<=5*1024*1024);
+ box.textContent=files.length?`เลือก ${files.length} รูป • ใช้ได้ ${valid.length} รูป`:'ยังไม่ได้เลือกรูป';
+ if(files.length>8)box.textContent+=' • เลือกได้ไม่เกิน 8 รูป';
 }
 async function saveLibraryItem(id){
- const row={name:$('#libName').value.trim(),description:$('#libDesc').value.trim(),emoji:$('#libEmoji').value.trim()||'🎁',cost:Number($('#libCost').value),stock:Number($('#libStock').value),active:true};
+ const btn=$('#saveLibraryBtn'),files=[...($('#libFiles')?.files||[])];
+ const manual=($('#libImages')?.value||'').split('\n').map(x=>x.trim()).filter(x=>/^https?:\/\//i.test(x));
+ const existing=(rewardLibrary.find(x=>x.id===id)?.images||[]).filter(Boolean);
+ const base=manual.length?manual:existing;
+ const row={name:$('#libName').value.trim(),description:$('#libDesc').value.trim(),emoji:$('#libEmoji').value.trim()||'🎁',images:base,cost:Number($('#libCost').value),stock:Number($('#libStock').value),active:true};
  if(!row.name||!Number.isInteger(row.cost)||row.cost<1||!Number.isInteger(row.stock)||row.stock<0)return toast('กรุณาตรวจสอบชื่อ ราคา และจำนวน');
+ if(base.length+files.length>8)return toast('รูปของรางวัลรวมกันได้ไม่เกิน 8 รูป');
  try{
-  if(isDemo()){if(id)Object.assign(rewardLibrary.find(x=>x.id===id),row);else rewardLibrary.unshift({...row,id:'lib'+Date.now()});demo.rewardLibrary=rewardLibrary;saveDemo();}
-  else {const q=id?supa.from('reward_library').update(row).eq('id',id).eq('teacher_id',user.id):supa.from('reward_library').insert({...row,teacher_id:user.id});if(q.error)throw q.error;const {error}=await q;if(error)throw error;const {data,error:er}=await supa.from('reward_library').select('*').eq('teacher_id',user.id).order('created_at',{ascending:false});if(er)throw er;rewardLibrary=data||[];}
+  if(files.length){
+   if(btn){btn.disabled=true;btn.textContent='กำลังอัปโหลดรูป...'}
+   row.images=[...base,...await uploadRewardImages(files)];
+  }
+  if(isDemo()){
+   if(files.length)throw new Error('การอัปโหลดจากเครื่องใช้ได้เมื่อเชื่อมต่อบัญชีครูออนไลน์');
+   if(id)Object.assign(rewardLibrary.find(x=>x.id===id),row);else rewardLibrary.unshift({...row,id:'lib'+Date.now()});
+   demo.rewardLibrary=rewardLibrary;saveDemo();
+  }else{
+   const q=id?supa.from('reward_library').update(row).eq('id',id).eq('teacher_id',user.id):supa.from('reward_library').insert({...row,teacher_id:user.id});
+   const {error}=await q;if(error)throw error;
+   const {data,error:er}=await supa.from('reward_library').select('*').eq('teacher_id',user.id).order('created_at',{ascending:false});if(er)throw er;rewardLibrary=data||[];
+  }
   openRewardLibrary();toast('บันทึกคลังของรางวัลแล้ว');
  }catch(e){toast(e.message||'บันทึกไม่สำเร็จ')}
+ finally{if(btn){btn.disabled=false;btn.textContent='บันทึกในคลัง'}}
 }
 async function deleteLibraryItem(id){
  if(!confirm('ลบรายการนี้ออกจากคลัง? ของรางวัลที่เพิ่มไว้ในห้องต่าง ๆ จะไม่ถูกลบ'))return;
@@ -353,7 +378,7 @@ async function saveCurrentRewardsToLibrary(){
  const existing=new Set((rewardLibrary||[]).map(x=>x.name.trim().toLowerCase()));
  const fresh=rewards.filter(r=>!existing.has(r.name.trim().toLowerCase()));
  if(!fresh.length)return toast('ของรางวัลห้องนี้มีอยู่ในคลังแล้ว');
- try{for(const r of fresh){const row={name:r.name,description:r.description||'',emoji:r.emoji||'🎁',cost:r.cost,stock:r.stock,active:true};
+ try{for(const r of fresh){const row={name:r.name,description:r.description||'',emoji:r.emoji||'🎁',images:Array.isArray(r.images)?r.images:[],cost:r.cost,stock:r.stock,active:true};
  if(isDemo())rewardLibrary.push({...row,id:'lib'+Date.now()+Math.random()});
  else{const {error}=await supa.from('reward_library').insert({...row,teacher_id:user.id});if(error)throw error;}}
  if(isDemo()){demo.rewardLibrary=rewardLibrary;saveDemo()}else{const {data,error}=await supa.from('reward_library').select('*').eq('teacher_id',user.id).order('created_at',{ascending:false});if(error)throw error;rewardLibrary=data||[]}
@@ -367,7 +392,7 @@ async function assignSelectedLibraryRewards(){
  const existing=new Set(rewards.map(x=>x.name.trim().toLowerCase()));
  const toAdd=selected.filter(x=>!existing.has(x.name.trim().toLowerCase()));
  if(!toAdd.length)return toast('ของรางวัลที่เลือกมีอยู่ในห้องนี้แล้ว');
- try{for(const r of toAdd){const row={name:r.name,description:r.description||'',emoji:r.emoji||'🎁',cost:r.cost,stock:r.stock??1,active:true};
+ try{for(const r of toAdd){const row={name:r.name,description:r.description||'',emoji:r.emoji||'🎁',images:Array.isArray(r.images)?r.images:[],cost:r.cost,stock:r.stock??1,active:true};
  if(isDemo()){demo.rewards.push({...row,id:'r'+Date.now()+Math.random(),classroom_id:activeRoom});}
  else{const {error}=await supa.from('reward_items').insert({...row,classroom_id:activeRoom,created_by:user.id});if(error)throw error;}}
  if(isDemo()){saveDemo();rewards=demo.rewards.filter(x=>x.classroom_id===activeRoom)}else await loadRoom();
