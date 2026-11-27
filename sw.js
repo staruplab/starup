@@ -1,5 +1,5 @@
 /* STAR UP! PWA service worker — GitHub Pages /starup/ */
-const CACHE_NAME = 'star-up-pwa-v29-quiz';
+const CACHE_NAME = 'star-up-pwa-v30-reward-shop-detail';
 const BASE = new URL(self.registration.scope);
 const CORE_FILES = [
   '',
