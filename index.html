@@ -275,7 +275,54 @@ function openScore(id=''){let s=currentStudents().find(x=>x.id===id);modal(`<h3>
 async function saveScore(){let id=$('#scoreStudent').value,delta=Number($('#scoreAmount').value)*Number($('#scoreSign').value),reason=$('#scoreReason').value.trim();if(!delta||!reason)return toast('กรุณากรอกจำนวนดาวและเหตุผล');let s=students.find(x=>x.id===id);if(!s)return toast('ไม่พบนักเรียน');try{if(isDemo()){s.stars+=delta;demo.transactions.unshift({student_id:id,stars_delta:delta,reason,created_at:new Date().toISOString()});saveDemo()}else{let {error}=await supa.rpc('teacher_adjust_stars',{p_student_id:id,p_stars_delta:delta,p_reason:reason});if(error)throw error;await loadRoom()}closeModal();renderTeacher();toast('บันทึกดาวเรียบร้อย')}catch(e){toast(e.message)}}
 function openRewardForm(id=null){let r=rewards.find(x=>x.id===id);modal(`<h3>${r?'แก้ไขของรางวัล':'เพิ่มของรางวัล'} 🎁</h3><div class="fieldrow"><label>ชื่อของรางวัล</label><input class="field" id="rewardName" value="${esc(r?.name||'')}" placeholder="เช่น ชุดเครื่องเขียน"></div><div class="fieldrow"><label>รายละเอียดของรางวัล</label><textarea class="field" id="rewardDesc" rows="4" placeholder="เขียนรายละเอียดของรางวัลได้หลายบรรทัด">${esc(r?.description||'')}</textarea><div class="tiny muted">รายละเอียดจะแสดงเมื่อนักเรียนกดเข้าดูของรางวัล</div></div><div class="fieldrow"><label>📷 อัปโหลดรูปภาพจากเครื่อง (เลือกได้หลายรูป สูงสุด 8 รูป)</label><input class="field" id="rewardFiles" type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple onchange="previewRewardUploads()"><div class="tiny muted" id="rewardUploadHint">รองรับ JPG, PNG, WEBP และ GIF ขนาดไม่เกิน 5 MB ต่อรูป</div><div id="rewardUploadPreview" class="tiny muted"></div></div><div class="tiny muted">รูปเดิมจะยังคงอยู่เมื่อแก้ไข สามารถเพิ่มรูปจากอุปกรณ์ได้ รวมไม่เกิน 8 รูป</div></div><div class="grid" style="grid-template-columns:1fr 1fr"><div class="fieldrow"><label>Emoji สำรอง</label><input class="field" id="rewardEmoji" value="${esc(r?.emoji||'🎁')}" maxlength="5"></div><div class="fieldrow"><label>จำนวนดาวที่ใช้แลก</label><input class="field" id="rewardCost" type="number" min="1" value="${r?.cost||50}"></div></div><div class="fieldrow"><label>จำนวนของรางวัลคงเหลือ</label><input class="field" id="rewardStock" type="number" min="0" value="${r?.stock??5}"></div><div class="modalfoot"><button class="btn white" onclick="closeModal()">ยกเลิก</button><button class="btn primary" id="saveRewardBtn" onclick="saveReward('${id||''}')">บันทึก</button></div>`)}
 function previewRewardUploads(){let el=$('#rewardFiles'),files=[...(el?.files||[])],box=$('#rewardUploadPreview');if(!box)return;let valid=files.filter(f=>f.type.startsWith('image/')&&f.size<=5*1024*1024);box.textContent=files.length?`เลือก ${files.length} รูป • ใช้ได้ ${valid.length} รูป`:'ยังไม่ได้เลือกรูป';if(files.length>8)box.textContent+=' • เลือกได้ไม่เกิน 8 รูป'}
-async function uploadRewardImages(files){if(!files.length)return [];if(!supa||!user||!activeRoom)throw new Error('การอัปโหลดรูปต้องเข้าสู่ระบบครูออนไลน์');if(files.length>8)throw new Error('อัปโหลดได้ไม่เกิน 8 รูป');let urls=[];for(let file of files){if(!file.type.startsWith('image/'))throw new Error('ไฟล์ที่เลือกต้องเป็นรูปภาพ');if(file.size>5*1024*1024)throw new Error('รูปภาพต้องมีขนาดไม่เกิน 5 MB ต่อรูป');let ext=({ 'image/jpeg':'jpg','image/png':'png','image/webp':'webp','image/gif':'gif'})[file.type];if(!ext)throw new Error('รองรับเฉพาะ JPG, PNG, WEBP และ GIF');let path=`${activeRoom}/${crypto.randomUUID()}.${ext}`;let {error}=await supa.storage.from('reward-images').upload(path,file,{cacheControl:'3600',upsert:false,contentType:file.type});if(error)throw error;let {data}=supa.storage.from('reward-images').getPublicUrl(path);urls.push(data.publicUrl)}return urls}
+async function compressRewardImage(file){
+ if(file.type==='image/gif'||file.size<450*1024||!('createImageBitmap'in window))return file;
+ let bitmap;
+ try{bitmap=await createImageBitmap(file)}catch{return file}
+ try{
+  const max=1600,scale=Math.min(1,max/Math.max(bitmap.width,bitmap.height));
+  const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(bitmap.width*scale));canvas.height=Math.max(1,Math.round(bitmap.height*scale));
+  const ctx=canvas.getContext('2d',{alpha:true});ctx.drawImage(bitmap,0,0,canvas.width,canvas.height);
+  const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/webp',.82));
+  if(!blob||blob.size>=file.size)return file;
+  return new File([blob],file.name.replace(/\.[^.]+$/i,'.webp'),{type:'image/webp',lastModified:Date.now()});
+ }finally{bitmap.close?.()}
+}
+function starupUploadPopup(files,statuses){
+ const done=statuses.filter(x=>x.state==='done').length,remaining=files.length-done;
+ const rows=files.map((f,i)=>{let x=statuses[i]||{state:'waiting'};let icon=x.state==='done'?'✓':x.state==='uploading'?'↑':x.state==='compressing'?'◌':'○';let color=x.state==='done'?'#159447':x.state==='error'?'#d64545':'#7154d9';let label=x.state==='done'?'อัปโหลดเสร็จแล้ว':x.state==='uploading'?'กำลังอัปโหลด':x.state==='compressing'?'กำลังปรับขนาดภาพ':x.state==='error'?'ไม่สำเร็จ':'รออัปโหลด';return `<div style="display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:11px;background:#faf8ff;margin:5px 0;text-align:left"><span style="width:25px;height:25px;border-radius:50%;display:grid;place-items:center;background:${color}18;color:${color};font-weight:900;flex:none">${icon}</span><span style="min-width:0;flex:1"><span style="display:block;font-size:12px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(f.name)}</span><span style="display:block;font-size:11px;color:${color}">${label}</span></span></div>`}).join('');
+ modal(`<div style="text-align:center;padding:8px 2px 2px"><div style="width:60px;height:60px;border-radius:50%;margin:0 auto 10px;background:#f2edff;color:#7048d8;display:grid;place-items:center;font-size:32px">☁</div><h3 style="margin:0 0 7px;font-size:20px">กำลังอัปโหลดภาพ...</h3><p style="margin:0;color:#514477;font-size:14px;font-weight:700">เสร็จแล้ว ${done}/${files.length} ภาพ · เหลือ ${remaining} ภาพ</p><div style="height:9px;border-radius:20px;background:#e9e2fb;overflow:hidden;margin:12px 8px"><div style="height:100%;width:${Math.round(done/files.length*100)}%;background:linear-gradient(90deg,#8b65f1,#b69cff);transition:width .2s"></div></div><div style="max-height:250px;overflow:auto;margin:10px 0">${rows}</div><p style="font-size:11px;color:#81769b;margin:5px 0">กรุณารอสักครู่ อย่าปิดหน้าต่างระหว่างอัปโหลด</p></div>`);
+}
+async function uploadRewardImages(files,onProgress){
+ if(!files.length)return [];
+ if(!supa||!user||!activeRoom)throw new Error('การอัปโหลดรูปต้องเข้าสู่ระบบครูออนไลน์');
+ if(files.length>8)throw new Error('อัปโหลดได้ไม่เกิน 8 รูป');
+ const statuses=files.map(()=>({state:'waiting'})),urls=new Array(files.length);
+ const update=(i,state)=>{statuses[i]={state};onProgress?.(statuses.map(x=>({...x})))};
+ onProgress?.(statuses.map(x=>({...x})));
+ let next=0,failed=null;
+ async function worker(){
+  while(true){
+   const i=next++;if(i>=files.length||failed)return;
+   const original=files[i];
+   try{
+    if(!original.type.startsWith('image/'))throw new Error(`ไฟล์ ${original.name} ไม่ใช่รูปภาพ`);
+    if(original.size>5*1024*1024)throw new Error(`รูป ${original.name} มีขนาดเกิน 5 MB`);
+    if(!['image/jpeg','image/png','image/webp','image/gif'].includes(original.type))throw new Error(`รูป ${original.name} ต้องเป็น JPG, PNG, WEBP หรือ GIF`);
+    update(i,'compressing');const file=await compressRewardImage(original);
+    update(i,'uploading');
+    const ext=file.type==='image/jpeg'?'jpg':file.type==='image/png'?'png':file.type==='image/gif'?'gif':'webp';
+    const path=`${activeRoom}/${crypto.randomUUID()}.${ext}`;
+    const {error}=await supa.storage.from('reward-images').upload(path,file,{cacheControl:'31536000',upsert:false,contentType:file.type});
+    if(error)throw error;
+    urls[i]=supa.storage.from('reward-images').getPublicUrl(path).data.publicUrl;update(i,'done');
+   }catch(e){update(i,'error');failed=failed||e}
+  }
+ }
+ await Promise.all(Array.from({length:Math.min(3,files.length)},()=>worker()));
+ if(failed)throw failed;
+ return urls;
+}
 function editReward(id){openRewardForm(id)}
 async function saveReward(id){
  const btn=$('#saveRewardBtn'),files=[...($('#rewardFiles')?.files||[])],existing=(rewards.find(x=>x.id===id)?.images||[]).filter(Boolean),base=manual.length?manual:existing;
@@ -285,7 +332,7 @@ async function saveReward(id){
  try{
   if(btn){btn.disabled=true;btn.textContent=files.length?'กำลังอัปโหลด...':'กำลังบันทึก...'}
   starupActionPopup('loading',files.length?'กำลังอัปโหลดภาพ':'กำลังบันทึกของรางวัล',files.length?`กำลังอัปโหลดภาพ ${files.length} รูป กรุณารอสักครู่`:'กรุณารอสักครู่ ระบบกำลังบันทึกข้อมูล');
-  if(files.length){if(isDemo())throw new Error('การอัปโหลดจากเครื่องใช้ได้เมื่อเชื่อมต่อบัญชีครูออนไลน์');row.images=[...base,...await uploadRewardImages(files)]}
+  if(files.length){if(isDemo())throw new Error('การอัปโหลดจากเครื่องใช้ได้เมื่อเชื่อมต่อบัญชีครูออนไลน์');row.images=[...base,...await uploadRewardImages(files, statuses=>starupUploadPopup(files,statuses))]}
   starupActionPopup('loading','กำลังบันทึกรายการ','อัปโหลดภาพเรียบร้อยแล้ว กำลังบันทึกข้อมูลของรางวัล');
   if(isDemo()){
    if(id)Object.assign(rewards.find(x=>x.id===id),row);
