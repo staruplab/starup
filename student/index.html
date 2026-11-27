@@ -239,8 +239,53 @@
 @media(max-width:600px){.reward-gallery{height:min(72vw,58vh)!important;min-height:190px!important}.reward-thumbs{gap:7px}.reward-thumb{flex:0 0 82px;height:82px}}
 
 </style>
+
+<style id="starup-minimal-splash-v1">
+/* Minimal STAR UP startup: preserve the original supplied logo and all app branding. */
+#startupSplash{
+ position:fixed!important;inset:0!important;width:100vw!important;height:100vh!important;height:100dvh!important;
+ min-height:100vh!important;min-height:100dvh!important;z-index:99999!important;
+ display:grid!important;place-items:center!important;overflow:hidden!important;
+ padding:env(safe-area-inset-top) 16px env(safe-area-inset-bottom)!important;margin:0!important;
+ background:linear-gradient(145deg,#fbf9ff 0%,#f2edff 100%)!important;
+ transition:opacity .24s ease,visibility .24s ease!important;
+}
+#startupSplash:before,#startupSplash:after{content:none!important;display:none!important;animation:none!important}
+#startupSplash .startup-inner{
+ position:relative!important;z-index:1!important;width:auto!important;height:auto!important;
+ display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;
+ gap:13px!important;margin:0!important;padding:0!important;animation:suMinimalEnter 1s ease-out both!important;
+}
+#startupSplash .startup-full-image{
+ display:block!important;position:relative!important;width:clamp(76px,22vw,112px)!important;height:auto!important;
+ max-width:34vw!important;max-height:24vh!important;object-fit:contain!important;object-position:center!important;
+ border:0!important;border-radius:0!important;clip-path:none!important;padding:0!important;margin:0!important;
+ background:transparent!important;box-shadow:0 5px 16px rgba(80,48,150,.10)!important;
+ animation:none!important;filter:none!important;
+}
+#startupSplash .startup-dots{
+ position:static!important;left:auto!important;bottom:auto!important;transform:none!important;
+ display:flex!important;align-items:center!important;justify-content:center!important;gap:6px!important;
+ margin:0!important;padding:0!important;z-index:2!important;
+}
+#startupSplash .startup-dots i{
+ display:block!important;width:5px!important;height:5px!important;border-radius:50%!important;
+ background:#9879df!important;box-shadow:none!important;animation:suMinimalDot 1s ease-in-out infinite!important;
+}
+#startupSplash .startup-dots i:nth-child(2){animation-delay:.12s!important}
+#startupSplash .startup-dots i:nth-child(3){animation-delay:.24s!important}
+#startupSplash .startup-loading-label{display:none!important}
+#startupSplash.is-hidden{opacity:0!important;visibility:hidden!important;pointer-events:none!important}
+@keyframes suMinimalEnter{0%{opacity:0;transform:translateY(5px) scale(.97)}100%{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes suMinimalDot{0%,70%,100%{opacity:.35;transform:translateY(0)}35%{opacity:1;transform:translateY(-3px)}}
+@media(prefers-reduced-motion:reduce){
+ #startupSplash,#startupSplash .startup-inner{transition:none!important;animation:none!important}
+ #startupSplash .startup-dots i{animation:none!important}
+}
+</style>
+
 </head>
-<body><div id="startupSplash" aria-label="กำลังเปิด STAR UP"><div class="startup-inner"><img class="startup-full-image" src="../splash-star-up.jpg?v=splash10" alt="STAR UP!"><div class="startup-dots"><i></i><i></i><i></i></div></div></div><div id="app"></div><div class="modalback" id="modalback" onclick="if(event.target===this&&missionUploadBusy)event.preventDefault()"><div class="modal" id="modal"></div></div>
+<body><div id="startupSplash" aria-label="กำลังเปิด STAR UP"><div class="startup-inner"><img class="startup-full-image" src="logo-star-up-rounded.png?v=splash-minimal-v1" alt="STAR UP!"><div class="startup-dots"><i></i><i></i><i></i></div></div></div><div id="app"></div><div class="modalback" id="modalback" onclick="if(event.target===this&&missionUploadBusy)event.preventDefault()"><div class="modal" id="modal"></div></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
 <script>
 // ใส่ Supabase Project URL และ anon/public key ของเจ้าของระบบก่อนเผยแพร่ออนไลน์
@@ -885,5 +930,5 @@ async function installStarUpApp(){
 if('serviceWorker' in navigator){ window.addEventListener('load',()=>{ const swUrl=new URL('./sw.js?v=34',location.href); const swScope=new URL('./',location.href).pathname; navigator.serviceWorker.register(swUrl.href,{scope:swScope,updateViaCache:'none'}).then(reg=>reg.update()).catch(err=>console.warn('PWA service worker registration failed:',err)); }); }
 window.addEventListener('load',starUpRefreshInstallButton);
 </script>
-<script src="quiz.js?v=14"></script>
+<script src="quiz.js?v=13"></script>
 </body></html>
