@@ -1,5 +1,5 @@
 /* STAR UP! student PWA — independent scope and cache */
-const CACHE_NAME = 'star-up-student-v32-reward-shop';
+const CACHE_NAME = 'star-up-student-v33-startup-timeout-fix';
 const BASE=new URL(self.registration.scope);
 const CORE=['','index.html','manifest.webmanifest','logo-star-up.jpg','logo-star-up-transparent.png','icon-192.png','icon-512.png','apple-touch-icon.png','favicon-32.png'].map(p=>new URL(p,BASE).href);
 self.addEventListener('install',e=>e.waitUntil((async()=>{const c=await caches.open(CACHE_NAME);await Promise.all(CORE.map(async u=>{try{const r=await fetch(u,{cache:'reload'});if(r.ok)await c.put(u,r)}catch{}}));await self.skipWaiting()})()));
