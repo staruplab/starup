@@ -138,7 +138,7 @@ function qAlertShow(items){
   const n=sNow();
   el.innerHTML=`<div class="panel" style="max-width:420px;width:100%;max-height:85vh;overflow:auto"><div class="center"><div class="big">🧠</div><h3 style="margin:4px 0">${items.length>1?`มี Quiz ${items.length} รายการ`:items[0].stage==='new'?'มี Quiz ใหม่!':'แจ้งเตือน Quiz'}</h3></div>${items.map(({r,stage})=>{const o=ms(r.open_at),c=ms(r.close_at),isOpen=n>=o;return `<div class="itemcard" style="margin-top:8px"><span class="badge" style="background:${lab[stage][1]};color:#fff">${lab[stage][0]}</span><h4 style="margin:6px 0 2px">${esc(r.title)}</h4><div class="tiny muted">${r.question_count} ข้อ · ${Math.round(r.time_limit_seconds/60)} นาที/คน · ทำได้ครั้งเดียว</div><div style="font-weight:800;margin:6px 0">${isOpen?cd(c,'ปิดในอีก',S.off):cd(o,'เปิดในอีก',S.off)}</div>${isOpen?`<button class="btn primary" style="width:100%" onclick="quizAlertStart('${r.id}')">${r.attempt?'▶ ทำต่อ':'▶ เริ่มทำเลย'}</button>`:''}</div>`}).join('')}<button class="btn soft" style="width:100%;margin-top:10px" onclick="quizAlertGo()">ไปที่หน้า Quiz</button><button class="btn white small" style="width:100%;margin-top:6px" onclick="quizAlertClose()">ไว้ก่อน</button></div>`}
 window.quizAlertClose=()=>{document.getElementById('quizAlert')?.remove();setTimeout(()=>{try{showNextStudentNotice()}catch(e){}},250)};
-window.quizAlertGo=()=>{quizAlertClose();try{studentTab='quiz';renderStudent();scrollTo(0,0)}catch(e){}};
+window.quizAlertGo=()=>{document.getElementById('quizAlert')?.remove();try{studentTab='quiz';renderStudent();scrollTo(0,0);markTabSeen();paintBadge()}catch(e){}setTimeout(()=>{try{showNextStudentNotice()}catch(e){}},300)};
 window.quizAlertStart=id=>{quizAlertClose();quizStart(id)};
 function rCard(r){const o=ms(r.open_at),c=ms(r.close_at),n=sNow(),a=r.attempt,done=a&&a.submitted_at;let body='';
   if(done)body=chip(`✅ ทำแล้ว ${a.score}/${a.max} · ⭐ ${a.stars}`,'#e3f7eb','#237b4e')+`<button class="btn soft" style="width:100%;margin-top:8px" onclick="quizReview('${r.id}')">ดูเฉลย</button>`;
@@ -166,7 +166,20 @@ window.quizSubmit=async auto=>{const t=S.tk;if(!t||t.sub)return;const miss=t.qs.
 window.quizReview=async id=>{try{const r=await supa.rpc('student_get_round_review',{p_token:studentToken,p_round:id});if(r.error)throw r.error;rvRender(r.data)}catch(e){toast(e.message||String(e))}};
 function rvRender(d){const L=['ก','ข','ค','ง','จ','ฉ'];ov(`<div class="panel center"><div class="big">${d.score===d.max?'🏆':'🎉'}</div><h2>${esc(d.title)}</h2><div style="font-size:28px;font-weight:900">${d.score}/${d.max} คะแนน</div><div style="font-size:22px;font-weight:800;margin:6px 0">⭐ ได้ ${d.stars} ดาว</div></div>${d.questions.map(q=>`<div class="panel" style="margin-top:10px"><b>ข้อ ${q.i+1}. ${esc(q.body)}</b>${imgH(q.image_url)}${q.choices.map((c,k)=>{const ok=k===q.correct_index,me=k===q.mine;return `<div style="padding:9px 11px;margin:5px 0;border-radius:10px;background:${ok?'#e3f7eb':me?'#fde8eb':'#f6f4fb'};border:1px solid ${ok?'#7fd1a3':me?'#eba3b1':'#ece8f6'}">${ok?'✅':me?'❌':'▫️'} ${L[k]||k+1}. ${esc(c)}${me?' <span class="tiny">(คำตอบของคุณ)</span>':''}</div>`}).join('')}${q.mine==null?'<div class="tiny muted">คุณไม่ได้ตอบข้อนี้</div>':''}${q.explanation?`<div class="notice info" style="margin-top:8px">💡 ${esc(q.explanation)}</div>`:''}</div>`).join('')}<button class="btn primary" style="width:100%;margin:14px 0" onclick="quizCloseReview()">ปิด</button>`)}
 window.quizCloseReview=()=>{ovClose();if(tabQuiz())renderStudent()};
-if(typeof showNextStudentNotice==='function'){const _sn=showNextStudentNotice;window.showNextStudentNotice=showNextStudentNotice=function(){if(document.getElementById('quizOverlay'))return;if(document.getElementById('quizAlert')&&!(typeof studentNoticeQueue!=='undefined'&&(studentNoticeQueue||[]).some(n=>n.kind==='urgent_mission')))return;return _sn.apply(this,arguments)}}   /* ไม่แจ้งเตือนแทรกขณะทำ/ดูผล Quiz */
+if(typeof showNextStudentNotice==='function'){
+ const _sn=showNextStudentNotice;
+ window.showNextStudentNotice=showNextStudentNotice=function(){
+  if(document.getElementById('quizOverlay'))return;
+  /* ภารกิจด่วนมีสิทธิ์แสดงก่อน Quiz; การแจ้งเตือนทั่วไปเข้าคิวหลัง Quiz */
+  const urgent=typeof studentNoticeQueue!=='undefined'&&(studentNoticeQueue||[]).some(n=>n.kind==='urgent_mission');
+  if(document.getElementById('quizAlert')&&!urgent)return;
+  if(!document.getElementById('quizAlert')&&!urgent&&typeof qAlertCheck==='function'){
+    const pendingQuiz=(S.list||[]).some(r=>{const a=r.attempt,n=sNow();return !(a&&a.submitted_at)&&n<ms(r.close_at)&&!((getSeen()[r.id]||[]).includes('new')&&n<ms(r.open_at))});
+    if(pendingQuiz){qAlertCheck();if(document.getElementById('quizAlert'))return;}
+  }
+  return _sn.apply(this,arguments)
+ }
+}   /* คิวแจ้งเตือน: ภารกิจด่วน > Quiz > ข่าวดี/แจ้งเตือนทั่วไป และไม่แทรกขณะทำ Quiz */
 if(typeof renderStudent==='function'){const _rs=renderStudent;window.renderStudent=renderStudent=function(){const r=_rs.apply(this,arguments);try{paintBadge()}catch(e){}return r}}
 if(typeof studentContent==='function'){const _sc=studentContent;window.studentContent=studentContent=function(){return tabQuiz()?quizStudentPage():_sc.apply(this,arguments)}}
 function sStart(){rLoad();setInterval(()=>{if(!document.hidden)rLoad()},30000);setInterval(()=>{if(document.hidden||S.tk)return;cdTick(S.off,()=>rLoad());qAlertCheck()},15000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)rLoad()})}
