@@ -134,16 +134,37 @@ function qAlertCheck(){
 function qAlertShow(items){
   const lab={new:['QUIZ ใหม่','#E94B68'],open:['เริ่มทำได้แล้ว','#24A477'],h1:['ใกล้ปิดแล้ว','#D99532'],m10:['เหลือเวลาไม่ถึง 10 นาที','#E94B68'],remind:['คุณครูส่งข้อความเตือน','#7959D6']};
   if(items.some(x=>x.stage==='m10'||x.stage==='remind'))try{playUrgentSound()}catch(e){}
-  let el=document.getElementById('quizAlert');if(!el){el=document.createElement('div');el.id='quizAlert';el.style.cssText='position:fixed;inset:0;z-index:99990;background:rgba(28,20,49,.62);backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);display:flex;align-items:center;justify-content:center;padding:18px;font-family:inherit';document.body.append(el)}
-  const n=sNow(),cards=items.map(({r,stage})=>{const o=ms(r.open_at),c=ms(r.close_at),isOpen=n>=o,ts=isOpen?c:o,pre=isOpen?'ปิดในอีก':'เริ่มในอีก';return `<article style="background:linear-gradient(145deg,#fbf9ff,#f3efff);border:1px solid #e9e0fb;border-radius:20px;padding:18px 17px;margin-top:12px;box-shadow:0 5px 18px rgba(87,62,145,.07)">
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px"><span style="display:inline-flex;align-items:center;gap:5px;background:${lab[stage][1]};color:#fff;border-radius:999px;padding:6px 11px;font-size:12px;font-weight:800">🧠 ${lab[stage][0]}</span><span style="font-size:11px;color:#8b7da8;font-weight:700">STAR UP</span></div>
-    <h3 style="margin:12px 0 5px;color:#352751;font-size:20px;line-height:1.35">${esc(r.title)}</h3>
-    <div style="display:flex;flex-wrap:wrap;gap:7px;margin-top:10px"><span style="background:#fff;border:1px solid #e8e0f4;border-radius:999px;padding:6px 10px;color:#655779;font-size:12px">☷ ${r.question_count} ข้อ</span><span style="background:#fff;border:1px solid #e8e0f4;border-radius:999px;padding:6px 10px;color:#655779;font-size:12px">◷ ${Math.round(r.time_limit_seconds/60)} นาที</span><span style="background:#fff;border:1px solid #e8e0f4;border-radius:999px;padding:6px 10px;color:#655779;font-size:12px">ทำได้ครั้งเดียว</span></div>
-    <div style="margin-top:15px;background:#fff;border:1px solid #e8e0f4;border-radius:15px;padding:13px;text-align:center"><div style="font-size:12px;color:#806bb0;font-weight:700">${pre}</div><div data-quiz-clock="${ts}" style="font-size:25px;font-weight:900;letter-spacing:.2px;color:#684bc0;margin-top:3px;font-variant-numeric:tabular-nums">${fmtDHM((ts-n)/1000)}</div><div style="font-size:10px;color:#9a90aa;margin-top:2px">วัน · ชั่วโมง · นาที</div></div>
-    ${isOpen?`<button style="width:100%;border:0;border-radius:14px;padding:14px 12px;margin-top:13px;background:linear-gradient(100deg,#7655d8,#6244c1);color:#fff;font-weight:800;font-size:15px;box-shadow:0 5px 13px rgba(104,75,192,.22);cursor:pointer" onclick="quizAlertStart('${r.id}')">🚀 ${r.attempt?'ทำ Quiz ต่อ':'ไปทำ Quiz'}　›</button>`:`<button style="width:100%;border:0;border-radius:14px;padding:14px 12px;margin-top:13px;background:#7655d8;color:#fff;font-weight:800;font-size:15px;cursor:pointer" onclick="quizAlertGo()">🚀 ไปหน้า Quiz เพื่อเตรียมตัว　›</button>`}
-  </article>`}).join('');
-  el.innerHTML=`<div style="width:100%;max-width:440px;max-height:88vh;overflow:auto;background:#fff;border-radius:23px;padding:22px 18px 16px;box-shadow:0 22px 70px rgba(20,12,42,.28);box-sizing:border-box"><div style="text-align:center;padding:2px 4px 5px"><div style="width:54px;height:54px;border-radius:18px;margin:0 auto 9px;background:linear-gradient(145deg,#f0eaff,#e4d9ff);display:flex;align-items:center;justify-content:center;font-size:27px">🧠</div><h2 style="margin:0;color:#352751;font-size:22px;font-weight:900">${items.length>1?`มี Quiz ใหม่ ${items.length} รายการ`:items[0].stage==='new'?'พร้อมท้าทายความรู้หรือยัง?':'แจ้งเตือน Quiz'}</h2><p style="margin:6px 0 0;color:#8a7d9f;font-size:13px">คุณครูเตรียมแบบทดสอบมาให้แล้ว ✨</p></div>${cards}<button style="width:100%;border:1px solid #e8e1f2;border-radius:13px;padding:11px;margin-top:10px;background:#fff;color:#665a78;font-weight:700;font-size:13px;cursor:pointer" onclick="quizAlertClose()">ไว้ก่อน</button></div>`;
-  clearInterval(window.__starupQuizAlertClock);window.__starupQuizAlertClock=setInterval(()=>{const box=document.getElementById('quizAlert');if(!box){clearInterval(window.__starupQuizAlertClock);return}box.querySelectorAll('[data-quiz-clock]').forEach(x=>{x.textContent=fmtDHM((Number(x.dataset.quizClock)-sNow())/1000)})},1000);
+  let el=document.getElementById('quizAlert');
+  if(!el){el=document.createElement('div');el.id='quizAlert';document.body.append(el)}
+  el.style.cssText='position:fixed;inset:0;z-index:99990;background:rgba(24,18,43,.68);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;padding:16px;font-family:inherit;box-sizing:border-box';
+  const n=sNow();
+  const cards=items.map(({r,stage})=>{
+    const o=ms(r.open_at),c=ms(r.close_at),isOpen=n>=o,ts=isOpen?c:o,pre=isOpen?'เวลาที่เหลือ':'เริ่มทำได้ในอีก';
+    return `<article style="overflow:hidden;background:#fff;border:1px solid #eee8fb;border-radius:22px;margin-top:14px;box-shadow:0 9px 26px rgba(60,42,100,.09)">
+      <div style="padding:17px 18px 14px;background:linear-gradient(120deg,#f5f0ff 0%,#fff7fb 100%)">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px"><span style="display:inline-flex;align-items:center;gap:6px;background:${lab[stage][1]};color:#fff;border-radius:999px;padding:6px 11px;font-size:11px;font-weight:850;letter-spacing:.2px">🧠 ${lab[stage][0]}</span><span style="font-size:10px;letter-spacing:1.1px;color:#998bb5;font-weight:900">STAR UP</span></div>
+        <h3 style="margin:13px 0 5px;color:#30234e;font-size:21px;line-height:1.3;font-weight:900">${esc(r.title)}</h3>
+        <div style="font-size:12px;color:#887c9f;font-weight:600">คุณครูเตรียมแบบทดสอบมาให้แล้ว ✨</div>
+      </div>
+      <div style="padding:14px 16px 16px">
+        <div style="display:flex;gap:7px;flex-wrap:wrap"><span style="background:#f7f5fb;border:1px solid #eee9f6;border-radius:10px;padding:7px 10px;color:#655779;font-size:12px;font-weight:700">☷ ${r.question_count} ข้อ</span><span style="background:#f7f5fb;border:1px solid #eee9f6;border-radius:10px;padding:7px 10px;color:#655779;font-size:12px;font-weight:700">◷ ${Math.round(r.time_limit_seconds/60)} นาที</span><span style="background:#f7f5fb;border:1px solid #eee9f6;border-radius:10px;padding:7px 10px;color:#655779;font-size:12px;font-weight:700">ทำได้ครั้งเดียว</span></div>
+        <div style="margin-top:13px;border-radius:16px;padding:13px;background:linear-gradient(135deg,#6d4bc5,#8a68df);text-align:center;color:#fff">
+          <div style="font-size:11px;font-weight:750;opacity:.9">${pre}</div>
+          <div data-quiz-clock="${ts}" style="font-size:29px;font-weight:950;letter-spacing:.4px;margin-top:2px;font-variant-numeric:tabular-nums">${fmtDHM((ts-n)/1000)}</div>
+          <div style="font-size:10px;opacity:.78;margin-top:1px">วัน · ชั่วโมง · นาที</div>
+        </div>
+        ${isOpen?`<button style="width:100%;border:0;border-radius:14px;padding:14px 12px;margin-top:13px;background:linear-gradient(100deg,#7655d8,#6244c1);color:#fff;font-weight:850;font-size:15px;box-shadow:0 6px 15px rgba(104,75,192,.24);cursor:pointer" onclick="quizAlertStart('${r.id}')">🚀 ${r.attempt?'ทำ Quiz ต่อ':'ไปทำ Quiz'}　›</button>`:`<button style="width:100%;border:0;border-radius:14px;padding:14px 12px;margin-top:13px;background:linear-gradient(100deg,#7655d8,#6244c1);color:#fff;font-weight:850;font-size:15px;cursor:pointer" onclick="quizAlertGo()">🚀 ไปหน้า Quiz เพื่อเตรียมตัว　›</button>`}
+      </div>
+    </article>`;
+  }).join('');
+  el.innerHTML=`<div style="width:100%;max-width:460px;max-height:90vh;overflow:auto;background:#fff;border-radius:26px;padding:20px 18px 15px;box-shadow:0 25px 80px rgba(17,10,37,.32);box-sizing:border-box">
+    <div style="text-align:center;padding:2px 5px 3px"><div style="width:58px;height:58px;border-radius:20px;margin:0 auto 10px;background:linear-gradient(145deg,#eee5ff,#fce8f2);display:flex;align-items:center;justify-content:center;font-size:29px;box-shadow:inset 0 0 0 1px #e9defb">🧠</div>
+    <div style="font-size:22px;line-height:1.25;font-weight:950;color:#30234e">${items.length>1?`มี Quiz ใหม่ ${items.length} รายการ`:items[0].stage==='new'?'พร้อมท้าทายความรู้หรือยัง?':'แจ้งเตือน Quiz'}</div><p style="margin:6px 0 0;color:#8a7d9f;font-size:12px">เตรียมตัวให้พร้อม แล้วไปคว้าดาวกัน! ⭐</p></div>
+    ${cards}
+    <button style="width:100%;border:1px solid #e8e1f2;border-radius:13px;padding:12px;margin-top:12px;background:#fff;color:#665a78;font-weight:750;font-size:13px;cursor:pointer" onclick="quizAlertClose()">ไว้ก่อน</button>
+  </div>`;
+  clearInterval(window.__starupQuizAlertClock);
+  window.__starupQuizAlertClock=setInterval(()=>{const box=document.getElementById('quizAlert');if(!box){clearInterval(window.__starupQuizAlertClock);return}box.querySelectorAll('[data-quiz-clock]').forEach(x=>{x.textContent=fmtDHM((Number(x.dataset.quizClock)-sNow())/1000)})},1000);
 }
 window.quizAlertClose=()=>{clearInterval(window.__starupQuizAlertClock);document.getElementById('quizAlert')?.remove();setTimeout(()=>{try{showNextStudentNotice()}catch(e){}},250)};
 window.quizAlertGo=()=>{document.getElementById('quizAlert')?.remove();try{studentTab='quiz';renderStudent();scrollTo(0,0);markTabSeen();paintBadge()}catch(e){}setTimeout(()=>{try{showNextStudentNotice()}catch(e){}},300)};
